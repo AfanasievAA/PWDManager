@@ -5,6 +5,8 @@
 
 A PowerShell-based GUI password manager that creates and manages password storage using **RSA encryption** via certificates (CMS/PKCS#7). It is recommended to use hardware **smartcards or tokens** for maximum security.
 
+**How to install: Download all files (Green buttun Code -> Download ZIP), extract to the folder of your choice, run CMD file.**
+
 ## ✨ Features
 
 - 🖥️ **GUI interface** — just run the script and enjoy
