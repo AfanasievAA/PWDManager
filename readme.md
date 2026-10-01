@@ -1,7 +1,7 @@
 ﻿# 🔐 Secure Password Storage Manager
 
 **Version:** 1.10 (01 Oct 2026)
-**Author:** Andrew Afanasiev — [AfanasievAA@yandex.ru](mailto:AfanasievAA@yandex.ru)
+<img width="1002" height="739" alt="image" src="https://github.com/user-attachments/assets/5ca98cb2-edeb-44b1-8ad4-11692cbe9b15" />
 
 A PowerShell-based GUI password manager that creates and manages password storage using **RSA encryption** via certificates (CMS/PKCS#7). It is recommended to use hardware **smartcards or tokens** for maximum security.
 
