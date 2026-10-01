@@ -88,6 +88,3 @@ The **`##`** sequence is a reserved separator and may not appear in user names.
 - Missing certificates (e.g., disconnected token) are shown as `--- Missing Certificate ---` in the grid
 - The GUI blocks editing of a password that cannot be decrypted (private key missing)
 
-## 📬 Contact
-
-Andrew Afanasiev — [AfanasievAA@yandex.ru](mailto:AfanasievAA@yandex.ru)
