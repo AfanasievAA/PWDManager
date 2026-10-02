@@ -2,7 +2,7 @@
 [Parameter(Mandatory=$false, Position=1)]
     [string]$PasswordDataFileName = $null
 )
-$Script:version = "1.10 (01 Oct 2026)"
+$Script:version = "1.11 (01 Oct 2026)"
 <#
 .SYNOPSIS
   Secure Password Storage Manager

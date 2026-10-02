@@ -156,7 +156,7 @@ Returns: Transliterated string
 Returns: $true if member
 
 .NOTES
-  Version:        1.15
+  Version:        1.16
   Author:         Andrew Afanasiev
   Date:           02.10.2026
   Contacts:       AfanasievAA@yandex.ru
@@ -222,7 +222,6 @@ P.IdlePrevLastTick32(u): previous idle tick
 P.NativeMethodsAdded(b): native methods loaded flag  
 P._NativeMethodsType(o): native methods type holder  
 P.CachedLogFileName(s): cached log filename  
-P.LogStreamWriter(o): stream writer for log  
 
 M.ProcessLogMessage(s=MessageType,s=InputText,s=Parameters?,i=DebugLevel?)*: log message with optional formatting  
 M.LogInfo(s=InputText,s=Parameters?)*: write informational log entry  
@@ -281,6 +280,8 @@ class CommonClass {
     [int]$dupInfoCount = 0
     [int]$CurrentDebugLevel = 0
     $INIFileLoadedTime = $null
+    hidden [System.Collections.Generic.Dictionary[string, datetime]] $INIFileLoadTimes = [System.Collections.Generic.Dictionary[string, datetime]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    hidden [System.Collections.Generic.Dictionary[string, System.Collections.Generic.HashSet[string]]] $INIFileKnownVars = [System.Collections.Generic.Dictionary[string, System.Collections.Generic.HashSet[string]]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $TimeMeasureStart = $null
     $TimeMeasureLap = $null
     $TimeMeasureTotalSec = $null
@@ -295,7 +296,7 @@ class CommonClass {
     hidden [regex]$varnameRG = $null
     hidden [regex]$VarMultiLineStartRG = $null
     hidden [regex]$VarMultiLineEndRG = $null
-    [bool]$isPS7OrNewer = $PSVersionTable.PSVersion.Major -ge 7
+    [bool]$isPS7OrNewer = $false
     [datetime]$LastInfoTime = [datetime]::MinValue
     [datetime]$LastWarningTime = [datetime]::MinValue
     [datetime]$LastDebugTime = [datetime]::MinValue
@@ -307,8 +308,6 @@ class CommonClass {
     [regex]$SpacesRegex = $null
     [regex]$EmailRG = $null
     [regex]$NonHEXSymbols = $null
-    # Flag if types are already added
-    hidden [bool] $IdleNativeTypesAdded = $false
     hidden $_IdleNativeType = $null
     hidden $_IdleNativeLASTINPUTINFOType = $null
     $PasswordCharCodes = $null
@@ -316,16 +315,16 @@ class CommonClass {
     hidden [System.UInt64]$IdleReconstructedLastInput64 = 0
     hidden [uint32]$IdlePrevLastTick32 = 0
     hidden [bool]$IdleStateInitialized = $false
-    hidden [bool]$NativeMethodsAdded = $false
     hidden $_NativeMethodsType = $null    
     hidden [string]$CachedLogFileName = $null
-    hidden [System.IO.StreamWriter]$LogStreamWriter = $null
     hidden $FromHexStringMethod = $null
+    hidden [type]$_DataTableHelperType = $null
     [regex]$IntPatternRG = $null
     [regex]$DoublePatternRG = $null
     [regex]$MultiSpacesRegex = $null
     hidden [System.Collections.Generic.Dictionary[char, string]] $TranslitMap
     CommonClass() {
+        $this.isPS7OrNewer = (Get-Variable -Name PSVersionTable -Scope Global -ValueOnly).PSVersion.Major -ge 7
         if ($null -eq (Get-Variable MyInvocation -Scope 0).Value.MyCommand.Path) {
             $this.ScriptPath = (Get-Location).Path
         } else {
@@ -333,14 +332,22 @@ class CommonClass {
         }
         $this.CurrentUserIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         $this.ResolveCurrentUser()
+        if (-Not $this.UserDomainFQDN -and $env:USERDNSDOMAIN) {
+            # FQDN stays empty when GetUserNameEx(12) fails (local accounts, workstations)
+            $this.UserDomainFQDN = ($env:USERDNSDOMAIN -replace '[\\/:*?"<>|]', '_')
+        }
         if (-Not $this.UserName) {
             $parts = $this.CurrentUserIdentity.Name.Split('\', 2)
             $this.UserName = $parts[1]
             $this.UserDomain = $parts[0]
-            $this.UserDomainFQDN = $env:USERDNSDOMAIN -replace '[\\/:*?"<>|]', '_' 
+            # Do not overwrite an already resolved FQDN; USERDNSDOMAIN is empty for
+            # non-domain accounts and $null -replace would silently store an empty string
+            if (-Not $this.UserDomainFQDN -and $env:USERDNSDOMAIN) {
+                $this.UserDomainFQDN = ($env:USERDNSDOMAIN -replace '[\\/:*?"<>|]', '_')
+            }
         }
         $this.MultiLineRegex = [regex]::new("(\`r\`n){2,}", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.UnprintableCharsRegex = [regex]::new('[\p{C}&&[^\r\n]]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.UnprintableCharsRegex = [regex]::new('[\p{C}-[\r\n]]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.plainTextOnlyRegEx = [regex]::new('\p{C}+', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.QuotesRegex = [regex]::new("['""]", [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.NonAsciiCharsRegex = [regex]::new("[^\x20-\x7E]", [System.Text.RegularExpressions.RegexOptions]::Compiled)
@@ -350,7 +357,12 @@ class CommonClass {
         $this.DoublePatternRG = [regex]::new("^-?\d+\.\d+$", [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.EmailRG = [regex]::new('[a-z0-9!#\$%&''*+/=^_`{|}~-]+(?:\.[a-z0-9!#\$%&''*+/=^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?', [System.Text.RegularExpressions.RegexOptions]::Compiled -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         $this.NonHEXSymbols = [regex]::new('[^0-9A-Fa-f]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.HostName =  ([System.Net.Dns]::GetHostEntry([string]"localhost").HostName)
+        try {
+            # GetHostEntry can throw in offline / DNS-restricted environments
+            $this.HostName = [System.Net.Dns]::GetHostEntry("localhost").HostName
+        } catch {
+            $this.HostName = $env:COMPUTERNAME
+        }
         $this.commentRG = [regex]::new("^\s*#", [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.sectionRG = [regex]::new("^\s*\[([\w\d_]{2,})\]", [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.varnameRG = [regex]::new("^\s*([\w\d_]{2,})\s*=\s*(.*)$", [System.Text.RegularExpressions.RegexOptions]::Compiled)
@@ -390,7 +402,7 @@ class CommonClass {
         $map.Add('ğ', 'g'); $map.Add('ı', 'i'); $map.Add('ş', 's')
     }
 
-    [void] ProcessLogMessage([string]$MessageType, [string]$InputText, [string]$Parameters = "", [int]$DebugLevel = 1) {
+    [void] ProcessLogMessage([string]$MessageType, [string]$InputText, [string]$Parameters, [int]$DebugLevel) {
         $LCLLogFileName = $null
         $writeHostParams = $null
         $isDuplicate = $false
@@ -419,8 +431,6 @@ class CommonClass {
         } else {
             $this.FilterUnprintableChars($InputText)
         }
-
-        $filteredText = $filteredText.Replace('"', '`"')
 
         $currentTime = [DateTime]::Now
 
@@ -550,7 +560,10 @@ class CommonClass {
         if ($this.WriteToLogFile) {
             $timestamp = [System.DateTime]::Now.ToString("yyyy-MM-dd HH-mm")            
             if (-not $this.CachedLogFileName) {
-                $this.CachedLogFileName = "$($this.LogFileName)_$($this.StartUpDateTime.toString('yyyy-MM-dd_HH-mm'))_$($this.UserName).log"
+                # Anchor once to an absolute path so later CWD changes do not split the log across locations
+                $this.CachedLogFileName = [System.IO.Path]::GetFullPath("$($this.LogFileName)_$($this.StartUpDateTime.toString('yyyy-MM-dd_HH-mm'))_$($this.UserName).log")
+                # AppendAllText creates the file but not the directory
+                $null = [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($this.CachedLogFileName))
             }
             $LCLLogFileName = $this.CachedLogFileName
 
@@ -559,10 +572,15 @@ class CommonClass {
             } else {
                 "$timestamp $finalText"
             }
-            [System.IO.File]::AppendAllText($LCLLogFileName, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
+            try {
+                # A failed log write must not crash the caller; console-only warning to avoid recursion
+                [System.IO.File]::AppendAllText($LCLLogFileName, "$logEntry`r`n", [System.Text.Encoding]::UTF8)
+            } catch {
+                Write-Host "WARNING! Cannot write to log file '$LCLLogFileName': $($_.Exception.Message)" -ForegroundColor Yellow
+            }
         }
     }
-    [void] ProcessLogMessage([string]$MessageType, [string]$InputText, [string]$Parameters = "") {
+    [void] ProcessLogMessage([string]$MessageType, [string]$InputText, [string]$Parameters) {
         $this.ProcessLogMessage($MessageType, $InputText, $Parameters, 1)
     }
     [void] ProcessLogMessage([string]$MessageType, [string]$InputText) {
@@ -575,13 +593,13 @@ class CommonClass {
         Outputs informational messages with optional formatting parameters. Supports color coding,
         duplicate message suppression, and log-only mode.
     .PARAMETER InputText
-        The message text to display. Can be a string or array (will be joined with newlines).
+        The message text to display. An array is coerced to a single string (elements joined with spaces by $OFS).
     .PARAMETER Parameters
         Optional formatting parameters as a space-separated string. Supported values:
         - "-Fore COLOR"    - Sets foreground color (e.g., "-Fore GREEN", "-Fore CYAN")
         - "-Back COLOR"    - Sets background color (e.g., "-Back BLACK", "-Back RED")  
         - "LogOnly"        - Writes only to log file, not to console
-        - "multiline"      - Preserves multiline formatting in log file
+        - "multiline"      - Collapses repeated blank lines in the message (affects both console and log)
         
         Color options: Black, DarkBlue, DarkGreen, DarkCyan, DarkRed, DarkMagenta, 
         DarkYellow, Gray, DarkGray, Blue, Green, Cyan, Red, Magenta, Yellow, White.
@@ -592,11 +610,11 @@ class CommonClass {
     .EXAMPLE
         $CommonObj.LogInfo("Multi-line`r`ncontent", "multiline -Fore CYAN")
     #>
-    [void] LogInfo($InputText, $Parameters = "") {
+    [void] LogInfo($InputText, $Parameters) {
         $this.ProcessLogMessage("Info", $InputText, $Parameters)
     }
     [void] LogInfo($InputText) {
-        $this.ProcessLogMessage("Info", $InputText, $null)
+        $this.ProcessLogMessage("Info", $InputText, "")
     }
     <#
     .SYNOPSIS
@@ -617,11 +635,11 @@ class CommonClass {
         Warning messages automatically include "WARNING!" prefix in log files and
         use system warning formatting in console.
     #>
-    [void] LogWarning($InputText, $Parameters = "") {
+    [void] LogWarning($InputText, $Parameters) {
         $this.ProcessLogMessage("Warning", $InputText, $Parameters)
     }
     [void] LogWarning($InputText) {
-        $this.ProcessLogMessage("Warning", $InputText, $null)
+        $this.ProcessLogMessage("Warning", $InputText, "")
     }
     <#
     .SYNOPSIS
@@ -639,12 +657,12 @@ class CommonClass {
     .EXAMPLE
         $CommonObj.LogDebug("Detailed variable dump", 3)  # Verbose debug
     .EXAMPLE
-        $CommonObj.LogDebug("API response received", 2) -Fore MAGENTA  # Colored debug
+        $CommonObj.LogDebug("API response received", 2)  # LogDebug has no formatting parameters
     .NOTES
         Debug level filtering allows controlling verbosity without modifying code.
         Set $CommonObj.CurrentDebugLevel to control which messages are displayed.
     #>
-    [void] LogDebug($InputText, $Level = 1) {
+    [void] LogDebug($InputText, $Level) {
         $this.ProcessLogMessage("Debug", $InputText, "", $Level)
     }
     [void] LogDebug($InputText) {
@@ -653,18 +671,19 @@ class CommonClass {
     # This function will load all settings from INI file into script scope variables
     # Version 2026.08.04
     # Example:
-    # General]
+    # [General]
     # DebugLevel=1
     # [SMTPServer]
     # Login=Security-Center
     # From=Security-Center@eurosib-hydro.ru
     # Will be loaded as ${script:INI-General-DebugLevel} and ${script:INI-SMTPServer-Login} and ${script:INI-SMTPServer-FROM} variables 
-    # Those will be avaailable to any procedure in script
+    # Those will be available to any procedure in script
     # Multiline are supported
     #    ParameterMultiline=@"
     #    Some text
     #    Some text again
     #    "@
+    # On re-read, script variables for sections/parameters removed from the file are deleted automatically
     [void] ReadINIFile($FileName) {
         if (-not (Test-Path $FileName)) {
             $this.LogInfo("INI file not found: $FileName")
@@ -673,6 +692,11 @@ class CommonClass {
         
         $section = "default"
         $varCount = 0
+        # Per-file tracking of set variables: allows cleaning up sections/params deleted from the file on re-read
+        $normalizedPath = [System.IO.Path]::GetFullPath($FileName)
+        $previousVars = $null
+        $null = $this.INIFileKnownVars.TryGetValue($normalizedPath, [ref]$previousVars)
+        $currentVars = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         $multiLineReading = $false
         $paramName = $null
         $varValue = [System.Text.StringBuilder]::new()
@@ -688,9 +712,13 @@ class CommonClass {
                 if ($this.VarMultiLineEndRG.IsMatch($trimmedLine)) {
                     $multiLineReading = $false
                     $value = $varValue.ToString()
+                    # Drop the newline appended after the last content line: a here-string value
+                    # does not include the line break directly before the closing marker
+                    if ($value.EndsWith("`r`n")) { $value = $value.Substring(0, $value.Length - 2) }
                     $scriptVarName = "INI-$section-$paramName"
 
                     Set-Variable -Name $scriptVarName -Value $value -Scope Script
+                    $null = $currentVars.Add($scriptVarName)
                     $this.LogDebug("$scriptVarName = $value", 2)
                     $varCount++
 
@@ -709,12 +737,8 @@ class CommonClass {
             $sectionMatch = $this.sectionRG.Match($trimmedLine)
             if ($sectionMatch.Success) {
                 $section = $sectionMatch.Groups[1].Value
-                # Clean up previous variables from the same section.
-                # Exact prefix match instead of a wildcard: "INI-SMB-*" would also match "INI-SMBConnectAsUser-L0"
-                $sectionPrefix = "INI-$section-"
-                Get-Variable -Scope Script -ErrorAction SilentlyContinue | Where-Object { $_.Name.StartsWith($sectionPrefix, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object {
-                    Remove-Variable -Name $_.Name -Scope Script -Force -ErrorAction SilentlyContinue
-                }                
+                # No per-section cleanup here: parameters/sections deleted from the file
+                # are swept at the end of this method, without touching other files' variables                
                 continue
             }
 
@@ -730,11 +754,13 @@ class CommonClass {
                 $paramName = $varMatch.Groups[1].Value
                 $value = $varMatch.Groups[2].Value.Trim()
 
-                # Smart typing: convert to int or double if applicable
+                # Smart typing: convert to int or double if applicable.
+                # Invariant culture: [double]"1.5" follows the current locale (crash on ru-RU, wrong value on de-DE).
+                # try/catch keeps the original string when the value overflows the target type.
                 if ($this.IntPatternRG.IsMatch($value)) {
-                    $value = [int]$value
+                    try { $value = [int]$value } catch { }
                 } elseif ($this.DoublePatternRG.IsMatch($value)) {
-                    $value = [double]$value
+                    try { $value = [double]::Parse($value, [System.Globalization.CultureInfo]::InvariantCulture) } catch { }
                 }
 
                 # Type guard: a non-numeric string like "abc" would otherwise pass "$value -gt 0" in PowerShell
@@ -744,6 +770,7 @@ class CommonClass {
 
                 $scriptVarName = "INI-$section-$paramName"
                 Set-Variable -Name $scriptVarName -Value $value -Scope Script
+                $null = $currentVars.Add($scriptVarName)
                 $this.LogDebug("$scriptVarName = $value", 2)
                 $varCount++
             }
@@ -753,7 +780,24 @@ class CommonClass {
         if ($multiLineReading) {
             $this.LogWarning("INI file ($FileName): multiline value '$paramName' has no end marker, value discarded")
         }
+        # Sweep: delete variables this file set previously but does not define anymore
+        # (fully removed sections and removed parameters). Variables created by other
+        # INI files or manually by the script are never touched.
+        $staleVarCount = 0
+        if ($previousVars) {
+            foreach ($oldVarName in $previousVars) {
+                if (-not $currentVars.Contains($oldVarName)) {
+                    Remove-Variable -Name $oldVarName -Scope Script -Force -ErrorAction SilentlyContinue
+                    $this.LogDebug("Removed stale INI variable: $oldVarName", 2)
+                    $staleVarCount++
+                }
+            }
+        }
+        $this.INIFileKnownVars[$normalizedPath] = $currentVars
         $this.LogInfo("$varCount settings from INI file ($FileName) loaded.")
+        if ($staleVarCount -gt 0) {
+            $this.LogInfo("$staleVarCount stale variable(s) removed from previous INI content.")
+        }
     }
     
     # Checks if a INI file is changed and reads settings from it
@@ -762,15 +806,23 @@ class CommonClass {
         $INI_LastWriteTime = (Get-Item $FileName -ErrorAction SilentlyContinue).LastWriteTime
         if ($null -eq $INI_LastWriteTime) {
             return $null
-        } elseif ($null -eq $this.INIFileLoadedTime -or $this.INIFileLoadedTime -lt $INI_LastWriteTime) {
+        }
+        # Per-file tracking: with a single shared timestamp, any file written earlier than the
+        # most recently loaded file compares as "unchanged" and is never (re)read at all
+        $normalizedPath = [System.IO.Path]::GetFullPath($FileName)
+        $loadedTime = [datetime]::MinValue
+        $null = $this.INIFileLoadTimes.TryGetValue($normalizedPath, [ref]$loadedTime)
+        if ($loadedTime -lt $INI_LastWriteTime) {
             $this.ReadINIFile($FileName)
+            $this.INIFileLoadTimes[$normalizedPath] = $INI_LastWriteTime
+            # Kept for backward compatibility: write time of the most recently (re)read file
             $this.INIFileLoadedTime = $INI_LastWriteTime
             return $true
         } else {
             return $false
         }
     }
-    [string] FilterUnprintableChars([string]$InputString, [bool]$MultiLine = $false) {
+    [string] FilterUnprintableChars([string]$InputString, [bool]$MultiLine) {
         if ($MultiLine) {
             return $this.MultiLineRegex.Replace(($this.UnprintableCharsRegex.Replace($InputString, "")), "`r`n")
         } else {
@@ -817,12 +869,12 @@ class CommonClass {
             return $false
         }
     }
-    # Random password generator with aproximate length calculated from specified minimum and maximum length
-    # Excluded capital letter S, O, 0 enc
+    # Random password generator with approximate length calculated from the specified minimum and maximum length
+    # Excluded confusables: digit 0; uppercase I, O, S; lowercase i, l, o. Symbols: ! # $ & + -
     [string] NewRandomPassword([uint16]$Minimum_Length, [uint16]$Maximum_Length) {
         [uint16]$Current_Length = 0
         if ($Maximum_Length -gt $Minimum_Length -and $Maximum_Length -gt 1) {
-            $Current_Length = Get-Random -Minimum $Minimum_Length -Maximum $Maximum_Length
+            $Current_Length = Get-Random -Minimum $Minimum_Length -Maximum ($Maximum_Length + 1)
         } else {
             $Current_Length = $Minimum_Length
         }
@@ -835,8 +887,8 @@ class CommonClass {
         [int]$poolSize = $this.PasswordCharCodes.Length
         $sb = [System.Text.StringBuilder]::new($Current_Length)
 
-        if ($this.isPS7OrNewer) {
-            # PS7+: Use fast cryptographic GetInt32
+        if ($this.isPS7OrNewer -and [System.Security.Cryptography.RandomNumberGenerator].GetMethod("GetInt32", [Type[]]@([int]))) {
+            # PS 7.2+ (.NET 6+): fast cryptographic GetInt32; PS 7.0/7.1 fall through to the byte-array branch
             for ([uint16]$i = 0; $i -lt $Current_Length; $i++) {
                 $randomIndex = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($poolSize)
                 $null = $sb.Append([char]$this.PasswordCharCodes[$randomIndex])
@@ -864,10 +916,15 @@ class CommonClass {
     }
     [void] GetTiming([bool]$ResetTimer) {
         if ($null -eq $this.TimeMeasureStart -or $ResetTimer) {
+            # Clear stale results so callers never read values from the previous measurement
+            $this.TimeMeasureTotalSec = $null
+            $this.TimeMeasureLapSec = $null
             $this.TimeMeasureStart = [System.Datetime]::Now
             $this.TimeMeasureLap = $null
         } elseif ($null -eq $this.TimeMeasureLap) {
+            # First measurement after (re)start: the first lap equals the total elapsed time
             $this.TimeMeasureTotalSec = [math]::Round((([System.Datetime]::Now - $this.TimeMeasureStart).TotalSeconds), 2)
+            $this.TimeMeasureLapSec = $this.TimeMeasureTotalSec
             $this.TimeMeasureLap = [System.Datetime]::Now
         } else {
             $now = [System.Datetime]::Now
@@ -882,13 +939,13 @@ class CommonClass {
 	<#
 		.SYNOPSIS
 			Converts objects into a DataTable. 
-            Version by Andrew Afanasiev. 10 times faster.
+            Accelerated C# bulk converter (compiled once per session via Add-Type).
 		.DESCRIPTION
 			Converts objects into a DataTable, which are used for DataBinding.
 		.PARAMETER  InputObject
 			The input to convert into a DataTable.
-		.PARAMETER  Table
-			The DataTable you wish to load the input into.
+        .PARAMETER  OutputTable
+            The DataTable you wish to load the input into.
 		.PARAMETER RetainColumns
 			This switch tells the function to keep the DataTable's existing columns.
 		.PARAMETER FilterWMIProperties
@@ -896,79 +953,202 @@ class CommonClass {
 		.EXAMPLE
 			$DataTable = $CommonObj.ConvertToDataTable((Get-Process))
 	#>
-    [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable, [switch]$RetainColumns, [switch]$FilterWMIProperties) {
+    [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable, [bool]$RetainColumns, [bool]$FilterWMIProperties) {
         if (-Not $InputObject) { return $null }
-        if ($null -eq $OutputTable) { $OutputTable = New-Object System.Data.DataTable }
-        
-        if ($InputObject -is [System.Data.DataTable]) {
-            $OutputTable = $InputObject
-        } else {
-            if (-not $RetainColumns -or $OutputTable.Columns.Count -eq 0) {
-                $OutputTable.Clear()
-                $object = $null
-                foreach ($item in $InputObject) {
-                    if ($null -ne $item) { $object = $item; break }
-                }
-                if ($null -eq $object) { return $null }
+        if ($InputObject -is [System.Data.DataTable]) { return $InputObject }
 
-                # Get all the properties in order to create the columns
-                foreach ($prop in $object.PSObject.Get_Properties()) {
-                    if (-not $FilterWMIProperties -or -not $prop.Name.StartsWith('__')) {
-                        $type = $null
-                        if ($null -ne $prop.Value) {
-                            try { $type = $prop.Value.GetType() } catch { }
-                        }
-                        if ($null -ne $type) {
-                            $null = $OutputTable.Columns.Add($prop.Name, $type)
-                        } else {
-                            $null = $OutputTable.Columns.Add($prop.Name)
-                        }
-                    }
-                }
-                if ($object -is [System.Data.DataRow]) {
-                    foreach ($item in $InputObject) { $null = $OutputTable.Rows.Add($item) }
-                    return $OutputTable
-                }
-            } else {
-                $OutputTable.Rows.Clear()
-            }
+        if (-not $this._DataTableHelperType) {
+            # Session-level check first: other CommonClass instances in this session must not trigger a recompile
+            $helperType = 'CommonClassDataTableHelper' -as [type]
+            if (-not $helperType) {
+                $source = @'
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Data;
+using System.Management.Automation;
 
-            $readBlock = $null
-            $blockCreated = $false
+// High-performance bulk converter for CommonClass.ConvertToDataTable.
+public static class CommonClassDataTableHelper
+{
+    public static DataTable Convert(IEnumerable input, DataTable outputTable, bool retainColumns, bool filterWmiProperties)
+    {
+        if (outputTable == null) { outputTable = new DataTable(); }
 
-            foreach ($item in $InputObject) {
-                $row = $OutputTable.NewRow()
-                if ($item) {
-                    if (-not $blockCreated) {
-                        # Create a compiled ScriptBlock instead of Invoke-Expression
-                        # Wrap property names in single quotes to prevent injection
-                        $sb = [System.Text.StringBuilder]::new()
-                        foreach ($prop in $item.PSObject.Get_Properties()) {
-                            if ($OutputTable.Columns.Contains($prop.Name)) {
-                                $safeName = $prop.Name -replace "'", "''"
-                                $null = $sb.AppendLine("if (`$null -ne `$item.'$safeName') { `$row.Item('$safeName') = `$item.'$safeName' }")
-                            }
-                        }
-                        $readBlock = [ScriptBlock]::Create($sb.ToString())
-                        $blockCreated = $true
-                    }
-                    # Execute the compiled block. 
-                    # Using & $readBlock is fast and inherits current scope variables ($item, $row)
-                    & $readBlock
-                }
-                $null = $OutputTable.Rows.Add($row)
-            }
+        bool reuseSchema = retainColumns && outputTable.Columns.Count > 0;
+        // Column name -> ordinal map: ordinal writes are much faster than name-based row.Item("...") lookups
+        Dictionary<string, int> ordinals = null;
+        if (reuseSchema) {
+            outputTable.Rows.Clear();
+            ordinals = BuildOrdinals(outputTable);
         }
-        return $OutputTable
+
+        bool schemaBuilt = false;
+        bool anyRow = false;
+
+        // Suspend constraint checking and index maintenance for the bulk load
+        outputTable.BeginLoadData();
+        try {
+            foreach (object item in input) {
+                if (item == null) {
+                    continue;
+                }
+
+                // Pipeline items usually arrive PSObject-wrapped; unwrap to inspect the real object
+                PSObject ps = item as PSObject;
+                object baseItem = (ps != null) ? ps.BaseObject : item;
+
+                DataRowView rowView = baseItem as DataRowView;
+                DataRow sourceRow = (rowView != null) ? rowView.Row : (baseItem as DataRow);
+                if (sourceRow != null && sourceRow.Table != null) {
+                    if (!schemaBuilt && !reuseSchema) {
+                        // DataRow input: clone the source table schema (DataRow PS properties are ItemArray/RowState/... and useless as columns)
+                        outputTable.Rows.Clear();
+                        outputTable.Columns.Clear();
+                        foreach (DataColumn c in sourceRow.Table.Columns) {
+                            outputTable.Columns.Add(c.ColumnName, c.DataType);
+                        }
+                        ordinals = BuildOrdinals(outputTable);
+                        schemaBuilt = true;
+                    }
+                    outputTable.ImportRow(sourceRow);
+                    anyRow = true;
+                    continue;
+                }
+
+                PSObject itemPs = (ps != null) ? ps : PSObject.AsPSObject(item);
+                if (!schemaBuilt && !reuseSchema) {
+                    // Schema from the first non-null item; column order follows property order
+                    outputTable.Rows.Clear();
+                    outputTable.Columns.Clear();
+                    BuildSchema(itemPs, outputTable, filterWmiProperties, out ordinals);
+                    schemaBuilt = true;
+                }
+
+                DataRow row = outputTable.NewRow();
+                foreach (PSPropertyInfo prop in itemPs.Properties) {
+                    int ordinal;
+                    if (ordinals == null || !ordinals.TryGetValue(prop.Name, out ordinal)) {
+                        continue;
+                    }
+                    object val;
+                    try {
+                        val = prop.Value;
+                    } catch {
+                        continue;
+                    }
+                    if (val is PSObject) {
+                        val = ((PSObject)val).BaseObject;
+                    }
+                    if (val != null) {
+                        try {
+                            row[ordinal] = val;
+                        } catch {
+                            // Incompatible value type: keep DBNull instead of failing the whole batch
+                        }
+                    }
+                }
+                outputTable.Rows.Add(row);
+                anyRow = true;
+            }
+        } finally {
+            // finally guarantees the table never stays in suspended-load state on an exception
+            outputTable.EndLoadData();
+        }
+
+        if (!anyRow) {
+            return null;
+        }
+        return outputTable;
     }
-    [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable, [switch]$RetainColumns) {
-        return $this.ConvertToDataTable($InputObject, $OutputTable, $RetainColumns, $null)
+
+    private static Dictionary<string, int> BuildOrdinals(DataTable table) {
+        Dictionary<string, int> map = new Dictionary<string, int>(table.Columns.Count, StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < table.Columns.Count; i++) {
+            map[table.Columns[i].ColumnName] = i;
+        }
+        return map;
+    }
+
+    private static void BuildSchema(PSObject firstItem, DataTable table, bool filterWmiProperties, out Dictionary<string, int> ordinals) {
+        ordinals = new Dictionary<string, int>(16, StringComparer.OrdinalIgnoreCase);
+        foreach (PSPropertyInfo prop in firstItem.Properties) {
+            // Guard against duplicate member names (adapted + extended with the same name)
+            if (ordinals.ContainsKey(prop.Name)) {
+                continue;
+            }
+            if (filterWmiProperties && prop.Name.StartsWith("__", StringComparison.Ordinal)) {
+                continue;
+            }
+            Type valueType = null;
+            try {
+                object val = prop.Value;
+                if (val is PSObject) {
+                    val = ((PSObject)val).BaseObject;
+                }
+                if (val != null) {
+                    valueType = val.GetType();
+                }
+            }
+            catch { }
+            if (valueType != null) {
+                table.Columns.Add(prop.Name, valueType);
+            } else {
+                table.Columns.Add(prop.Name);
+            }
+            ordinals[prop.Name] = table.Columns.Count - 1;
+        }
+    }
+}
+'@
+                # Full-path references resolved from the running assemblies: version-agnostic
+                # (System.Data on PS 5.1 vs System.Data.Common on PS 7, GAC vs $PSHOME paths)
+                $refs = @(
+                    [object].Assembly.Location
+                    [System.Collections.Generic.Dictionary[string,int]].Assembly.Location
+                    [System.StringComparer].Assembly.Location
+                    [System.Data.DataTable].Assembly.Location
+                    [System.Management.Automation.PSObject].Assembly.Location
+                ) | Where-Object { $_ } | Sort-Object -Unique
+                try {
+                    $null = Add-Type -TypeDefinition $source -ReferencedAssemblies $refs -ErrorAction Stop
+                } catch {
+                    # Attempt 2: .NET Framework simple names resolved by the CodeDom compiler from
+                    # the framework directory. System.Xml is required transitively: DataTable
+                    # implements IXmlSerializable, and $refs can never contain it - that list is
+                    # built from assemblies of the types used in the source, which uses no
+                    # System.Xml types. On PS 5.1 the first attempt therefore always fails and
+                    # lands here (one-time cost, the session-level type check prevents recompiles)
+                    $retryRefs = @('System.dll', 'System.Core.dll', 'System.Data.dll', 'System.Xml.dll', 'System.Management.Automation.dll')
+                    try {
+                        $null = Add-Type -TypeDefinition $source -ReferencedAssemblies $retryRefs -ErrorAction Stop
+                    } catch {
+                        # Attempt 3: engine default references. Covers Core-based hosts (including
+                        # empty Assembly.Location scenarios) where the .NET Framework names above
+                        # do not exist; System.Data is already loaded by this point via $refs
+                        $null = Add-Type -TypeDefinition $source -ErrorAction Stop
+                    }
+                }
+                $helperType = 'CommonClassDataTableHelper' -as [type]
+            }
+            $this._DataTableHelperType = $helperType
+        }
+
+        # PowerShell foreach treats a string or a scalar as a single item; C# foreach needs a real IEnumerable
+        if ($InputObject -is [string] -or $InputObject -isnot [System.Collections.IEnumerable]) {
+            $InputObject = @($InputObject)
+        }
+
+        return $this._DataTableHelperType::Convert($InputObject, $OutputTable, [bool]$RetainColumns, [bool]$FilterWMIProperties)
+    }
+    [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable, [bool]$RetainColumns) {
+        return $this.ConvertToDataTable($InputObject, $OutputTable, $RetainColumns, $false)
     }    
     [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable) {
-        return $this.ConvertToDataTable($InputObject, $OutputTable, $null, $null)
+        return $this.ConvertToDataTable($InputObject, $OutputTable, $false, $false)
     }    
     [System.Data.DataTable] ConvertToDataTable($InputObject) {
-        return $this.ConvertToDataTable($InputObject, $null, $null, $null)
+        return $this.ConvertToDataTable($InputObject, $null, $false, $false)
     }    
     # Converts UTF8 string to a base64 encoded form
     [string] ConvertToBase64String([string]$inputText) {
@@ -985,7 +1165,6 @@ class CommonClass {
     [string] ConvertToCliXMLString($inputText) {
         return [System.Management.Automation.PSSerializer]::Serialize($inputText)
     }
-    # Converts back base64 encoded to a UTF8 string
     # Converts any CliXML String to an object
     [object] ConvertFromCliXMLString([string]$inputText) {
         Try {
@@ -995,8 +1174,11 @@ class CommonClass {
     }
     # Converts any HEX String to a byte array. $null returned if input not a hex string
     [byte[]] Hex2Bytes([string]$HexString) {
+        # Regex.Replace throws ArgumentNullException on a null input
+        if ([string]::IsNullOrEmpty($HexString)) { return $null }
         $cleanHex = $this.NonHEXSymbols.Replace($HexString, "")
-        if ($cleanHex.Length % 2 -ne 0) { return $null }
+        # Input containing no hex digits at all must yield $null, not an empty array
+        if ($cleanHex.Length -eq 0 -or $cleanHex.Length % 2 -ne 0) { return $null }
         try {
             # .NET 5+ FromHexString method if available; reflection result is cached
             if (-not $this.FromHexStringMethod) {
@@ -1015,13 +1197,13 @@ class CommonClass {
             return $null
         }
     }
-    # Converts any HEX String to a byte array. $null returned if input not a hex string
+    # Converts a byte array to an uppercase HEX string without separators (inverse of Hex2Bytes)
     [string] Bytes2Hex([byte[]]$BytesArr) {
-        return ([System.BitConverter]::ToString($BytesArr))
+         return ([System.BitConverter]::ToString($BytesArr))
     }
     # Computes CRC32 of any input byte array
     [string] Bytes2CRC32Hex([byte[]]$BytesArr) {
-        if ($BytesArr.Count -eq 0) { return "00000000" }
+        if ($null -eq $BytesArr -or $BytesArr.Count -eq 0) { return "00000000" }
 
         # Resolve type dynamically at runtime to bypass parser errors in PS 5.1; result cached
         $crcType = $this.Crc32Managed
@@ -1073,15 +1255,24 @@ class CommonClass {
     [bool] IsCertificatePrivateKeyExportable([System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate) {
         $cngKey = $null
         if (-not $Certificate.HasPrivateKey) { return $false }
+        $privateKey = $Certificate.PrivateKey
+        if ($null -eq $privateKey) { return $false }
+        # CNG keys (RSACng/ECDsaCng) have .Key but no CspKeyContainerInfo; CSP keys
+        # (RSACryptoServiceProvider) have CspKeyContainerInfo but no .Key. PowerShell returns
+        # $null for a property missing on the actual object, so both key kinds resolve dynamically.
+        $cspInfo = $privateKey.CspKeyContainerInfo
+        if ($cspInfo) { return $cspInfo.Exportable }
         if ($this.isPs7OrNewer) {
-            $cngKey = $Certificate.PrivateKey.Key
+            $cngKey = $privateKey.Key
             return ($cngKey -and $cngKey.ExportPolicy.HasFlag([System.Security.Cryptography.CngExportPolicies]::AllowPlaintextExport))
-        } else {
-            return $Certificate.PrivateKey.CspKeyContainerInfo.Exportable
         }
+        return $false
     }
-    #  Creates the target directory if it does not exist and applies a read (or read-write) ACE for the supplied SID. Errors are written to $this.ErrorLevel / $this.ErrorText.
-    [void] EnsureFolderWithPermissions([string]$FolderPath, $SID, $AllowWrite = $false) {
+    # Creates the target directory if it does not exist and applies a read (or read-write) ACE for the supplied SID. Errors are reported via Write-Error and recorded in LastErrorLevel / LastErrorMessage.
+    [void] EnsureFolderWithPermissions([string]$FolderPath, $SID, [bool]$AllowWrite) {
+        # Reset the error state so the caller sees the result of THIS call, not a stale failure
+        $this.LastErrorLevel = 0
+        $this.LastErrorMessage = ""
         $acl = $null
         $sidObject = $null
         $rights = $null
@@ -1119,7 +1310,8 @@ class CommonClass {
             #  Determine whether an identical rule already exists
             $writeBits = [System.Security.AccessControl.FileSystemRights]::Write -bor [System.Security.AccessControl.FileSystemRights]::Delete -bor [System.Security.AccessControl.FileSystemRights]::WriteAttributes -bor [System.Security.AccessControl.FileSystemRights]::WriteExtendedAttributes
             $exists = $false
-            foreach ($rule in $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+            # Inherited rules cannot be removed from this object; skip them in the state check
+            foreach ($rule in $acl.GetAccessRules($true, $false, [System.Security.Principal.SecurityIdentifier])) {
                 $sameSid = $rule.IdentityReference.Value -eq $SID
                 $sameRight = (($rule.FileSystemRights -band $rights) -eq $rights)
                 $isAllow = $rule.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow
@@ -1142,6 +1334,9 @@ class CommonClass {
                 Write-Host "Read$(if ($AllowWrite) {" and write"}) permissions for $($FolderPath) granted for SID: $SID"
             }
         } catch {
+            # Record the failure state for callers that check it
+            $this.LastErrorLevel = 1
+            $this.LastErrorMessage = $_.Exception.Message
             Write-Error "Failed to ensure folder '$FolderPath' with permissions: $($_.Exception.Message)"
         }
     }
@@ -1248,7 +1443,7 @@ class CommonClass {
         $resolvedPath = [System.IO.Path]::GetFullPath($combinedPath)
         $normalizedBaseWithSlash = $normalizedBase.TrimEnd('\') + '\'
         if (-not $resolvedPath.StartsWith($normalizedBaseWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $this.LogWarning("JPBPT1", "Error! Path traversal technique detected")
+            $this.LogWarning("Error! Path traversal technique detected (JPBPT1)")
             return $null
         }
         return $resolvedPath
@@ -1270,7 +1465,8 @@ class CommonClass {
 
         $size = 1024
         $buffer = [System.Text.StringBuilder]::new($size)
-        if ($this._UserAPIType::GetUserNameEx($format, $buffer, [ref]$size) -ne 0) {
+        # GetUserNameEx returns ERROR_SUCCESS (0) on success; the old check was inverted
+        if ($this._UserAPIType::GetUserNameEx($format, $buffer, [ref]$size) -eq 0) {
             return $buffer.ToString()
         }
         return $null
@@ -1448,6 +1644,7 @@ class CommonClass {
             5 { return $drType::Ignore }
             6 { return $drType::Yes }
             7 { return $drType::No }
+            32000 { return "Timeout" }
             default { return $drType::None }
         }
         return $null
@@ -1468,6 +1665,7 @@ class CommonClass {
         return (ConvertTo-SecureString -String $plainString -AsPlainText -Force)
     }
     [string] SecureStringToPlainText([System.Security.SecureString]$SecureString) {
+        if ($null -eq $SecureString) { return $null }
         $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString)
         try {
             return [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
