@@ -2,7 +2,7 @@
 [Parameter(Mandatory=$false, Position=1)]
     [string]$PasswordDataFileName = $null
 )
-$Script:version = "1.11 (01 Oct 2026)"
+$Script:version = "1.12 (06 Oct 2026)"
 <#
 .SYNOPSIS
   Secure Password Storage Manager
@@ -251,6 +251,7 @@ Add-Type -AssemblyName System.Windows.Forms -ErrorAction stop
  $Script:certThumbprint = ""
  $Script:StatusBarTextBox = $null
  $Script:CachedPrivateKeyCert = $null
+ $Script:PwdClearTimer = $null
  $Script:ConnectionHistory = @{
     RDP = New-Object System.Collections.Queue
     SMB = New-Object System.Collections.Queue
@@ -346,9 +347,6 @@ function Find-CertificatesByThumbprints {
     return $foundCerts.ToArray()
 }
 function Get-PrivateKeyCertificate {
-    # Force cache reset when requesting new search
-    $Script:CachedPrivateKeyCert = $null
-    
     [array]$thumbprints = $null
     if ($Script:CertificateDataGridView -and $Script:CertificateDataGridView.DataSource) {
         # Enumerate DefaultView: piping a DataTable itself does not enumerate its rows
@@ -359,8 +357,16 @@ function Get-PrivateKeyCertificate {
     }
 
     if ($thumbprints) {
+        # Cache key derived from the thumbprint list: the store is rescanned only when
+        # the grid content changes, not on every decrypt/encrypt call
+        $cacheKey = ($thumbprints | ForEach-Object { "$_".Trim().ToUpper() }) -join '|'
+        if ($Script:CachedPrivateKeyCert -and $Script:CachedPrivateKeyCertKey -eq $cacheKey) {
+            return $Script:CachedPrivateKeyCert
+        }
         $Script:CachedPrivateKeyCert = Find-CertificateByThumbprint -Thumbprints $thumbprints -HasPrivateKey $true
-        if (-not $Script:CachedPrivateKeyCert) {
+        if ($Script:CachedPrivateKeyCert) {
+            $Script:CachedPrivateKeyCertKey = $cacheKey
+        } else {
             Write-Statusbar "No private key found for the selected certificate" "red"
         }
         return $Script:CachedPrivateKeyCert
@@ -441,6 +447,7 @@ function Unprotect-RsaMessage {
     if ($encCert -is [System.Security.Cryptography.X509Certificates.X509Certificate2]) {
         # Split by comma and try each block
         $blocks = $MessageSecure -split ","
+        $lastError = $null
         foreach ($block in $blocks) {
             Try {
                 $block = $block.Trim()
@@ -452,8 +459,16 @@ function Unprotect-RsaMessage {
                     return $decrypted
                 }
             } Catch {
-                # The block is encrypted for another certificate - keep trying the remaining blocks
+                # The block may be encrypted for another certificate,
+                # or the private key (e.g. on a hardware token) failed transiently - keep the real reason
+                $lastError = $_.Exception.Message
             }
+        }
+        if ($lastError) {
+            Write-Host "❌ Decryption error: $lastError" -ForegroundColor DarkGray
+            # Drop the cached certificate: the key may be temporarily unavailable (token removed/re-inserted)
+            # or the cached object stale - the next call must rescan the certificate store
+            $Script:CachedPrivateKeyCert = $null
         }
     } else {
         Write-Host "No certificate with private key" -ForegroundColor Yellow
@@ -464,6 +479,8 @@ function Unprotect-RsaMessage {
     return $null
 }
 function Get-SelectedUserCredential {
+    # Must be initialized: an unset variable would be looked up in parent scopes and could return a stale row
+    $selectedItem = $null
     if ($Script:UserDataGridView.SelectedRows.Count -gt 0) {
         $selectedItem = $Script:UserDataGridView.SelectedRows[0].DataBoundItem
     }
@@ -576,8 +593,8 @@ function Invoke-TargetProcess {
             $innerCmd += " -ArgumentList $($escapedArgs -join ' ')"
         }
         $innerCmd += " -Verb RunAs"
-        $escapedInner = $innerCmd -replace '"','\"'
-        $outerArgs = "-NoProfile -Command `"$escapedInner`""
+        # -EncodedCommand avoids nested quoting issues ($, backtick, trailing backslash, quotes) on the outer command line
+        $outerArgs = "-NoProfile -EncodedCommand $([Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($innerCmd)))"
         
         $fullUser = if ($cred.Domain) { "$($cred.Domain)\$($cred.Login)" } else { $cred.Login }
         $psCred = [pscredential]::new($fullUser, $cred.Password)
@@ -642,7 +659,7 @@ function Connect-RdpSession {
         if (Save-NetworkCredentials -ResourcePath "TERMSRV/$($Server)" -Username $cred.RawLogin -Password $plainPwd -Type 1) {
             Write-Host "✅ Credentials saved for this session." -ForegroundColor Green
             $RdpSettingsFile = Get-Item $Script:rdpFileFullPath -ErrorAction SilentlyContinue
-            $rdpArgs = if ($RdpSettingsFile) { "$($RdpSettingsFile.Fullname) /v:$($Server)" } else { "/v:$($Server)" }
+            $rdpArgs = if ($RdpSettingsFile) { "`"$($RdpSettingsFile.Fullname)`" /v:$($Server)" } else { "/v:$($Server)" }
             
             $rdpProcess = Start-Process mstsc.exe -ArgumentList $rdpArgs -PassThru
             if ($rdpProcess -and $rdpProcess.Id -gt 0) {
@@ -650,7 +667,8 @@ function Connect-RdpSession {
                 
                 # Using Forms.Timer because it works in UI thread
                 $timer = New-Object System.Windows.Forms.Timer
-                $timer.Interval = 5000
+                # 30 s instead of 5 s: mstsc may ask for credentials late (certificate prompt, slow logon screen)
+                $timer.Interval = 30000
                 
                 # Save server to local variable
                 $targetServer = $Server
@@ -767,7 +785,7 @@ function Add-ContextMenuItemFromIni {
 if (`$FileBrowser.Filename) {
     `$fso = New-Object -ComObject Scripting.FileSystemObject
     `$selectedFileName = `$fso.getfile(`$FileBrowser.Filename).ShortPath
-    `$sb = [ScriptBlock]::Create('$actionString')
+    `$sb = [ScriptBlock]::Create('$(($actionString -replace "'", "''"))')
     & `$sb `$selectedFileName
 }
 "@
@@ -905,7 +923,8 @@ function Select-CertificateGui {
         }
     }
     
-    $CertDataGrid.DataSource = $CommonObj.ConvertToDataTable($CertArrayLST)
+    # ConvertToDataTable cannot infer a schema from an empty list - leave the grid unbound in that case
+    if ($CertArrayLST.Count -gt 0) { $CertDataGrid.DataSource = $CommonObj.ConvertToDataTable($CertArrayLST) }
     Set-DataGridColumnWidth -DataGridView $CertDataGrid -Widths @(280,120,120,320,350)
     
     [void][System.Windows.Forms.Application]::EnableVisualStyles()
@@ -1123,7 +1142,8 @@ function Show-PasswordManagerGui {
                 $Script:certThumbprint = ""
                 Initialize-EmptyGrids
                 $Script:PasswordDataFilePath = $newFilePath
-                $Thumbprint = Select-CertificateGui
+                # The first certificate of a new file must have a private key, otherwise the file cannot be decrypted later
+                $Thumbprint = Select-CertificateGui -PrivateKeyOnly $true
                 if ($Thumbprint) { Add-CertificateToGrid -Thumbprint $Thumbprint }
             } catch {
                 [System.Windows.Forms.MessageBox]::Show("Error creating new file: $($_.Exception.Message)", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
@@ -1224,13 +1244,24 @@ function Show-PasswordManagerGui {
     
     # --- Context menu ---
     $contextMenuStrip = [System.Windows.Forms.ContextMenuStrip]@{ Font = New-Object System.Drawing.Font("Courier New",10,[System.Drawing.FontStyle]::Regular) }
+    $Script:UserDataGridView.Add_CellMouseDown({
+        # Right-click must select the row under the cursor before the menu opens,
+        # otherwise menu actions would target a previously selected row (or none)
+        if ($_.Button -eq [System.Windows.Forms.MouseButtons]::Right -and $_.RowIndex -ge 0) {
+            $row = $Script:UserDataGridView.Rows[$_.RowIndex]
+            if ($_.ColumnIndex -ge 0 -and $Script:UserDataGridView.Columns[$_.ColumnIndex].Visible) {
+                $Script:UserDataGridView.CurrentCell = $row.Cells[$_.ColumnIndex]
+            }
+            $row.Selected = $true
+        }
+    })
     $Script:UserDataGridView.Add_MouseClick({
         if ($_.Button -eq [System.Windows.Forms.MouseButtons]::Right){ $contextMenuStrip.Show([System.Windows.Forms.Cursor]::Position) }
     })
     
     $toolStripItemEdit = [System.Windows.Forms.ToolStripMenuItem]@{ Text = "Edit" }
     $toolStripItemEdit.Add_Click({
-        if ($Script:UserDataGridView.SelectedRows.Count -eq 0) { return }
+        if ($Script:UserDataGridView.SelectedRows.Count -eq 0) { Write-Statusbar "No user selected in the grid." "red"; return }
         $selectedItem = $Script:UserDataGridView.SelectedRows[0].DataBoundItem
         if (-not $selectedItem) { return }
 
@@ -1299,28 +1330,65 @@ function Show-PasswordManagerGui {
     
     $CpyUserNameTS = [System.Windows.Forms.ToolStripMenuItem]@{ Text = "Copy user name" }
     $CpyUserNameTS.Add_Click({
-        if ($Script:UserDataGridView.SelectedRows.Count -eq 0) { return }
+        if ($Script:UserDataGridView.SelectedRows.Count -eq 0) { Write-Statusbar "No user selected in the grid." "red"; return }
         $selectedItem = $Script:UserDataGridView.SelectedRows[0].DataBoundItem
-        if ($selectedItem) { Set-Clipboard -Value $selectedItem.Login }
+        if (-not $selectedItem) { Write-Statusbar "No user selected in the grid." "red"; return }
+        try {
+            Set-Clipboard -Value $selectedItem.Login -ErrorAction Stop
+            Write-Statusbar "User name copied to clipboard" "green"
+        } catch {
+            Write-Statusbar "❌ Clipboard is busy, user name NOT copied: $($_.Exception.Message)" "red"
+        }
     })
     $contextMenuStrip.Items.Add($CpyUserNameTS) > $null
     
     $CpyPSWDTS = [System.Windows.Forms.ToolStripMenuItem]@{ Text = "Copy password" }
     $CpyPSWDTS.Add_Click({
-        if ($Script:UserDataGridView.SelectedRows.Count -eq 0) { return }
+        if ($Script:UserDataGridView.SelectedRows.Count -eq 0) { Write-Statusbar "No user selected in the grid." "red"; return }
         $selectedItem = $Script:UserDataGridView.SelectedRows[0].DataBoundItem
-        if ($selectedItem) {
+        if (-not $selectedItem) { Write-Statusbar "No user selected in the grid." "red"; return }
+        $plainPwd = $null
+        # The first decryption after a long idle can fail transiently (hardware token waking up) - retry once
+        foreach ($attempt in 1..2) {
             $plainPwd = Unprotect-RsaMessage -MessageSecure $selectedItem.Password
-            if ($null -ne $plainPwd) {
-                Set-Clipboard -Value $plainPwd
-                # Auto-clear the clipboard after 30 seconds unless the user copied something else
-                $clearTimer = New-Object System.Windows.Forms.Timer
-                $clearTimer.Interval = 30000
-                $clearScript = { if ((Get-Clipboard -Raw) -eq $plainPwd) { Set-Clipboard -Value '' }; $this.Stop(); $this.Dispose() }
-                $clearTimer.Add_Tick($clearScript.GetNewClosure())
-                $clearTimer.Start()
+            if ($null -ne $plainPwd) { break }
+            if ($attempt -eq 1) { Start-Sleep -Milliseconds 300 }
+        }
+        if ($null -eq $plainPwd) { Write-Statusbar "❌ Cannot decrypt password for $($selectedItem.Login)" "red"; return }
+        # The clipboard can be transiently busy (e.g. right after session unlock) - retry several times
+        $copied = $false
+        $lastError = $null
+        foreach ($attempt in 1..5) {
+            try {
+                Set-Clipboard -Value $plainPwd -ErrorAction Stop
+                $copied = $true
+                break
+            } catch {
+                $lastError = $_.Exception.Message
+                Start-Sleep -Milliseconds 200
             }
         }
+        if (-not $copied) { Write-Statusbar "❌ Clipboard is busy, password NOT copied: $lastError" "red"; return }
+        Write-Statusbar "Password of $($selectedItem.Login) copied. Clipboard clears in 30 sec." "green"
+        # Stop the previous clear timer so a stale timer cannot wipe a fresh copy of the same password
+        if ($Script:PwdClearTimer) { $Script:PwdClearTimer.Stop(); $Script:PwdClearTimer.Dispose(); $Script:PwdClearTimer = $null }
+        # Auto-clear the clipboard after 30 seconds unless the user copied something else
+        $clearTimer = New-Object System.Windows.Forms.Timer
+        $clearTimer.Interval = 30000
+        $clearScript = {
+            try {
+                # -ceq: case-sensitive compare; TrimEnd drops the newline some PowerShell versions append
+                if (("$(Get-Clipboard -Raw)").TrimEnd("`r","`n") -ceq $plainPwd) { Set-Clipboard -Value '' }
+            } catch {
+                # Clipboard busy at clear time - skip clearing, the timer must still stop
+            } finally {
+                $this.Stop(); $this.Dispose()
+                if ($Script:PwdClearTimer -eq $this) { $Script:PwdClearTimer = $null }
+            }
+        }
+        $clearTimer.Add_Tick($clearScript.GetNewClosure())
+        $Script:PwdClearTimer = $clearTimer
+        $clearTimer.Start()
     })
     $contextMenuStrip.Items.Add($CpyPSWDTS) > $null
     
@@ -1350,7 +1418,8 @@ function Add-CertificateToGrid {
     $certificate = Find-CertificateByThumbprint -Thumbprints $Thumbprint
     if (-not $certificate) { return }
     
-    # Reset cache when adding new certificate
+    # Manual cache reset in addition to the keyed cache: covers re-adding the same thumbprint
+    # (e.g. after re-inserting a token), which alone does not change the cache key
     $Script:CachedPrivateKeyCert = $null
     $Script:certThumbprint = $Thumbprint
     $dataTable = $Script:CertificateDataGridView.DataSource
@@ -1441,7 +1510,8 @@ function Export-PasswordData {
     $passwordsXML.PWDS = @()
     
     foreach ($userRow in $targetUsers) {
-        $existingPassword = $userRow["Password"]
+        # Cast to a string: DBNull (e.g. after an incomplete import) passes IsNullOrEmpty and aborts the save
+        $existingPassword = "$($userRow["Password"])"
         $plainPwd = ""
         
         if (-not [string]::IsNullOrEmpty($existingPassword)) {
@@ -1473,7 +1543,10 @@ function Export-PasswordData {
             Copy-Item $Script:PasswordDataFilePath "$($Script:PasswordDataFilePath).bak" -Force -ErrorAction Stop
         }
         
-        $passwordsXML | Export-Clixml $Script:PasswordDataFilePath -Force
+        # Write to a temp file first: a failed write must not corrupt the existing data file
+        $tempExportFile = "$($Script:PasswordDataFilePath).tmp"
+        $passwordsXML | Export-Clixml $tempExportFile -Force
+        Move-Item -LiteralPath $tempExportFile -Destination $Script:PasswordDataFilePath -Force
         Write-Statusbar "✅ $($Script:PasswordDataFilePath) saved successfully!" "green"
         return $true
     } catch {
