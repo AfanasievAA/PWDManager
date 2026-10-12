@@ -2,7 +2,7 @@
 [Parameter(Mandatory=$false, Position=1)]
     [string]$PasswordDataFileName = $null
 )
-$Script:version = "1.12 (06 Oct 2026)"
+$Script:version = "1.13 (12 Oct 2026)"
 <#
 .SYNOPSIS
   Secure Password Storage Manager
@@ -888,6 +888,30 @@ function Show-InputBoxDialog {
     return $null
 }
 
+function New-SelfSignedEncryptionCertificate {
+    param([Parameter(Mandatory=$true)][string]$CommonName)
+
+    # New-SelfSignedCertificate lives in the PKI module - import it explicitly
+    # in case command auto-loading is disabled
+    Import-Module PKI -ErrorAction SilentlyContinue
+    try {
+        # DocumentEncryptionCertLegacyCsp sets the Document Encryption EKU (1.3.6.1.4.1.311.80.1),
+        # which Select-CertificateGui filters by and Protect-CmsMessage requires;
+        # the legacy CSP key format is the most compatible one for CMS encrypt/decrypt
+        $newCert = New-SelfSignedCertificate -Type DocumentEncryptionCertLegacyCsp `
+            -Subject "CN=$CommonName" -FriendlyName $CommonName `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -NotAfter (Get-Date).AddYears(5) -KeyExportPolicy Exportable -ErrorAction Stop
+        $CommonObj.LogInfo("Self-signed certificate issued: $($newCert.Subject) [$($newCert.Thumbprint)]")
+        Write-Host "✅ Self-signed certificate issued: $($newCert.Subject) [$($newCert.Thumbprint)]" -ForegroundColor Green
+        return $newCert.Thumbprint
+    } catch {
+        Write-Host "❌ Failed to issue self-signed certificate: $($_.Exception.Message)" -ForegroundColor Red
+        [System.Windows.Forms.MessageBox]::Show("Failed to issue self-signed certificate: $($_.Exception.Message)", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return $null
+    }
+}
+
 function Select-CertificateGui {
     param([bool]$PrivateKeyOnly = $false)
     
@@ -899,8 +923,9 @@ function Select-CertificateGui {
     
     $OKButton = New-Object System.Windows.Forms.Button -Property @{ Location=New-Object System.Drawing.Point(10,315); Size=New-Object System.Drawing.Size(75,30); Text='OK'; DialogResult=[System.Windows.Forms.DialogResult]::OK }
     $CancelButton = New-Object System.Windows.Forms.Button -Property @{ Location=New-Object System.Drawing.Point(90,315); Size=New-Object System.Drawing.Size(80,30); Text='Cancel'; DialogResult=[System.Windows.Forms.DialogResult]::Cancel }
+    $NewCertButton = New-Object System.Windows.Forms.Button -Property @{ Location=New-Object System.Drawing.Point(180,315); Size=New-Object System.Drawing.Size(200,30); Text='Issue Self-Signed' }
     $Form.AcceptButton = $OKButton; $Form.CancelButton = $CancelButton
-    $Form.Controls.Add($OKButton); $Form.Controls.Add($CancelButton)
+    $Form.Controls.Add($OKButton); $Form.Controls.Add($CancelButton); $Form.Controls.Add($NewCertButton)
     
     $CertDataGrid = New-Object System.Windows.Forms.DataGridView -Property @{
         AllowUserToResizeRows = $false; RowHeadersVisible = $false; AllowUserToAddRows = $false
@@ -913,19 +938,48 @@ function Select-CertificateGui {
     $CertArrayLST = New-Object System.Collections.ArrayList
     $stores = if ($PrivateKeyOnly) { @("Cert:\CurrentUser\my") } else { @("Cert:\CurrentUser\my", "Cert:\CurrentUser\AddressBook", "Cert:\CurrentUser\TrustedPeople") }
     
-    foreach ($store in $stores) {
-        $certsFound = Get-ChildItem $store -ErrorAction SilentlyContinue | Where-Object {
-            $_.EnhancedKeyUsageList.ObjectId -like "1.3.6.1.4.1.311.80.1" -and (-not $PrivateKeyOnly -or $_.HasPrivateKey)
-        } | Select-Object @{Name='Name'; Expression={Get-CertificateDnsNames $_}}, NotBefore, NotAfter, Subject, Thumbprint
-        
-        if ($certsFound) {
-            if ($certsFound.Count -gt 1) { $CertArrayLST.AddRange($certsFound) } else { $CertArrayLST.Add($certsFound) }
+    # Shared grid population logic: used on form load and after issuing a self-signed certificate
+    $RefreshCertGrid = {
+        $CertArrayLST.Clear()
+        foreach ($store in $stores) {
+            $certsFound = Get-ChildItem $store -ErrorAction SilentlyContinue | Where-Object {
+                $_.EnhancedKeyUsageList.ObjectId -like "1.3.6.1.4.1.311.80.1" -and (-not $PrivateKeyOnly -or $_.HasPrivateKey)
+            } | Select-Object @{Name='Name'; Expression={Get-CertificateDnsNames $_}}, NotBefore, NotAfter, Subject, Thumbprint
+            
+            if ($certsFound) {
+                if ($certsFound.Count -gt 1) { $CertArrayLST.AddRange($certsFound) } else { $CertArrayLST.Add($certsFound) }
+            }
+        }
+        # ConvertToDataTable cannot infer a schema from an empty list - leave the grid unbound in that case
+        if ($CertArrayLST.Count -gt 0) {
+            $CertDataGrid.DataSource = $CommonObj.ConvertToDataTable($CertArrayLST)
+            Set-DataGridColumnWidth -DataGridView $CertDataGrid -Widths @(280,120,120,320,350)
         }
     }
+    & $RefreshCertGrid
     
-    # ConvertToDataTable cannot infer a schema from an empty list - leave the grid unbound in that case
-    if ($CertArrayLST.Count -gt 0) { $CertDataGrid.DataSource = $CommonObj.ConvertToDataTable($CertArrayLST) }
-    Set-DataGridColumnWidth -DataGridView $CertDataGrid -Widths @(280,120,120,320,350)
+    $NewCertButton.Add_Click({
+        # Ask the user for the common name (CN) of the certificate to issue
+        $certName = Show-InputBoxDialog -FormHeader "New Self-Signed Certificate" -RequestText "Certificate name (CN):" -ConnectButtonCaption "Create certificate"
+        if ([string]::IsNullOrWhiteSpace($certName)) { return }
+        # These characters would break the X.500 subject syntax - reject them before issuing
+        if ($certName -match '[,+"<>;\\]') {
+            [System.Windows.Forms.MessageBox]::Show("Certificate name must not contain: comma, plus, quote, < > ; or backslash", "Invalid name", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            return
+        }
+        $newThumbprint = New-SelfSignedEncryptionCertificate -CommonName $certName
+        if (-not $newThumbprint) { return }
+        # Reload the certificate list and preselect the freshly issued certificate
+        & $RefreshCertGrid
+        foreach ($row in $CertDataGrid.Rows) {
+            if ($row.DataBoundItem -and "$($row.DataBoundItem.Thumbprint)" -eq $newThumbprint) {
+                $row.Selected = $true
+                $CertDataGrid.CurrentCell = $row.Cells[0]
+                break
+            }
+        }
+        Write-Statusbar "Self-signed certificate '$certName' issued" "green"
+    })
     
     [void][System.Windows.Forms.Application]::EnableVisualStyles()
     if ($Form.ShowDialog() -eq "OK" -and $CertDataGrid.SelectedRows.Count -gt 0) {
