@@ -156,113 +156,113 @@ Returns: Transliterated string
 Returns: $true if member
 
 .NOTES
-  Version:        1.16
+  Version:        1.19
   Author:         Andrew Afanasiev
-  Date:           02.10.2026
+  Date:           17 Nov 2026
   Contacts:       AfanasievAA@yandex.ru
 #>
 <#
-LLM Contract 
+LLM Contract
 
-# legend: *=has shorter overloads, {a,b}=variant group, <x>=substituted token, ?=optional, =def=default, !=throws, @=metadata, #=phase, .main=top-level body, @export=exported  
-# types: s=string i=int b=bool o=obj a=array a<T>=typed array d=datetime r=regex ss=SecureString u=uint ul=ulong dict=Dictionary  
+# legend: *=has shorter overloads, {a,b}=variant group, <x>=substituted token, ?=optional, =def=default, !=throws, @=metadata, #=phase, .main=top-level body, @export=exported
+# types: s=string i=int b=bool o=obj a=array a<T>=typed array d=datetime r=regex ss=SecureString u=uint ul=ulong dict=Dictionary
 
-CommonClass: manage logging and utilities  
+CommonClass: manage logging and utilities
 
-P.BadParamsChars(a<char>): illegal parameter characters  
-P.LogFileName(s): base log file name  
-P.{WriteToLogFile,isPS7OrNewer,IdleStateInitialized,NativeMethodsAdded,UserAPITypesAdded,IdleNativeTypesAdded}(b): internal state flags  
-P.UserName(s): current user name  
-P.UserDomain(s): current user domain  
-P.UserDomainFQDN(s): user domain FQDN  
-P.HostName(s): host computer name  
-P.StartUpDateTime(d): script start time  
-P.ScriptPath(o): script directory path  
-P.LastDebugMessage(s): previous debug text  
-P.LastErrorMessage(s): previous error text  
-P.LastWarningMessage(s): previous warning text  
-P.LastInfoMessage(s): previous info text  
-P.LastErrorLevel(i): last error severity  
-P.dupDebugCount(i): debug duplicate counter  
-P.dupWarningCount(i): warning duplicate counter  
-P.dupInfoCount(i): info duplicate counter  
-P.CurrentDebugLevel(i): current debug verbosity  
-P.INIFileLoadedTime(o): INI load timestamp  
-P.TimeMeasureStart(o): timing start point  
-P.TimeMeasureLap(o): timing lap point  
-P.TimeMeasureTotalSec(o): total elapsed seconds  
-P.TimeMeasureLapSec(o): lap elapsed seconds  
-P.Crc32Managed(o): CRC32 implementation type  
-P.UserAPITypesAdded(b): API types loaded flag  
-P._UserAPIType(o): User API type holder  
-P.CurrentUserIdentity(o): current Windows identity  
-P.commentRG(r): comment line regex  
-P.sectionRG(r): INI section regex  
-P.varnameRG(r): variable assignment regex  
-P.VarMultiLineStartRG(r): multiline start regex  
-P.VarMultiLineEndRG(r): end regex  
-.LastInfoTime): last info  
-P.LastTime(d): last timestamp  
-PDebugTime(d last debug timestampP.MultiLineRegex(r): multiline separator regex  
-P.UnprintableCharsRegex(r): non-printable chars regex  
-P.plainTextOnlyRegEx(r): plain-text regex  
-P.QuotesRegex(r): quotes removal regex  
-P.NonAsciiCharsRegex(r): non-ASCII chars regex  
-P.SpacesRegex(r): whitespace regex  
-P.EmailRG(r): email detection regex  
-P.NonHEXSymbols(r): non-hex symbols regex  
-P.IntPatternRG(r): integer pattern regex  
-P.DoublePatternRG(r): floating-point pattern regex  
-P.MultiSpacesRegex(r): multiple spaces regex  
-P.TranslitMap(dict): character transliteration table  
-P.PasswordCharCodes(o): password character pool  
-P.LastInputInfo(o): last input info struct  
-P.IdleReconstructedLastInput64(u): reconstructed idle timestamp  
-P.IdlePrevLastTick32(u): previous idle tick  
-P.NativeMethodsAdded(b): native methods loaded flag  
-P._NativeMethodsType(o): native methods type holder  
-P.CachedLogFileName(s): cached log filename  
+P.BadParamsChars(a<char>): illegal parameter characters
+P.LogFileName(s): base log file name
+P.{WriteToLogFile,isPS7OrNewer,IdleStateInitialized,NativeMethodsAdded,UserAPITypesAdded,IdleNativeTypesAdded}(b): internal state flags
+P.UserName(s): current user name
+P.UserDomain(s): current user domain
+P.UserDomainFQDN(s): user domain FQDN
+P.HostName(s): host computer name
+P.StartUpDateTime(d): script start time
+P.ScriptPath(o): script directory path
+P.LastDebugMessage(s): previous debug text
+P.LastErrorMessage(s): previous error text
+P.LastWarningMessage(s): previous warning text
+P.LastInfoMessage(s): previous info text
+P.LastErrorLevel(i): last error severity
+P.dupDebugCount(i): debug duplicate counter
+P.dupWarningCount(i): warning duplicate counter
+P.dupInfoCount(i): info duplicate counter
+P.CurrentDebugLevel(i): current debug verbosity
+P.INIFileLoadedTime(o): INI load timestamp
+P.TimeMeasureStart(o): timing start point
+P.TimeMeasureLap(o): timing lap point
+P.TimeMeasureTotalSec(o): total elapsed seconds
+P.TimeMeasureLapSec(o): lap elapsed seconds
+P.Crc32Managed(o): CRC32 implementation type
+P.UserAPITypesAdded(b): API types loaded flag
+P._UserAPIType(o): User API type holder
+P.CurrentUserIdentity(o): current Windows identity
+P.commentRG(r): comment line regex
+P.sectionRG(r): INI section regex
+P.varnameRG(r): variable assignment regex
+P.VarMultiLineStartRG(r): multiline start regex
+P.VarMultiLineEndRG(r): end regex
+.LastInfoTime): last info
+P.LastTime(d): last timestamp
+PDebugTime(d last debug timestampP.MultiLineRegex(r): multiline separator regex
+P.UnprintableCharsRegex(r): non-printable chars regex
+P.plainTextOnlyRegEx(r): plain-text regex
+P.QuotesRegex(r): quotes removal regex
+P.NonAsciiCharsRegex(r): non-ASCII chars regex
+P.SpacesRegex(r): whitespace regex
+P.EmailRG(r): email detection regex
+P.NonHEXSymbols(r): non-hex symbols regex
+P.IntPatternRG(r): integer pattern regex
+P.DoublePatternRG(r): floating-point pattern regex
+P.MultiSpacesRegex(r): multiple spaces regex
+P.TranslitMap(dict): character transliteration table
+P.PasswordCharCodes(o): password character pool
+P.LastInputInfo(o): last input info struct
+P.IdleReconstructedLastInput64(u): reconstructed idle timestamp
+P.IdlePrevLastTick32(u): previous idle tick
+P.NativeMethodsAdded(b): native methods loaded flag
+P._NativeMethodsType(o): native methods type holder
+P.CachedLogFileName(s): cached log filename
 
-M.ProcessLogMessage(s=MessageType,s=InputText,s=Parameters?,i=DebugLevel?)*: log message with optional formatting  
-M.LogInfo(s=InputText,s=Parameters?)*: write informational log entry  
-M.LogWarning(s=InputText,s=Parameters?)*: write warning log entry  
-M.LogDebug(s=InputText,i=Level?=1)*: write debug log entry  
-M.ReadINIFile(s=FileName)*: load INI settings into script variables  
-M.ReadINIFileIfChanged(s=FileName)*: reload INI if modified  
-M.FilterUnprintableChars(s=InputString,b=MultiLine?=false)*: strip non-printable characters  
-M.ExtractPrintableCharsOnly(s=InputString)*: keep only printable characters  
-M.FilterQuotes(s=InputString)*: remove quotation marks  
-M.FilterNonAsciiChars(s=InputString)*: discard non-ASCII characters  
-M.FilterSpaces(s=InputString)*: normalize whitespace  
-M.MatchEmailInText(s=InputString)*: extract email address from text  
-M.TestEmailAddress(s=InputString)*: validate email format  
-M.NewRandomPassword(u=Minimum_Length,u=Maximum_Length?)*: generate random password  
-M.GetTiming(b=ResetTimer=false)* start or record checkpoint  
-MToDataTable=InputObject,oOutputTable?,=Retain?,b=WMIProperties?)* -> o: transform objects into DataTable  
-M.ConvertToBase64String(s=inputText)* -> s: encode string to Base64  
-M.ConvertFromBase64String(s=inputText)* -> s: decode Base64 to string  
-M.ConvertToCliXMLString(o=inputText)* -> s: serialize object to CLI-XML  
-M.ConvertFromCliXMLString(s=inputText)* -> o: deserialize CLI-XML to object  
-M.Hex2Bytes(s=HexString)* -> a<byte>: convert HEX string to byte array  
-M.Bytes2Hex(a<byte> BytesArr)* -> s: format bytes as HEX string  
-M.Bytes2CRC32Hex(a<byte> BytesArr)* -> s: compute CRC32 hex digest  
-M.IsAdministrator()*: check if current user is admin  
-M.IsCertificatePrivateKeyExportable(o=Certificate)*: verify certificate key exportability  
-M.EnsureFolderWithPermissions(s=FolderPath,o=SID?,b=AllowWrite?=false)*: create folder and set ACL  
-M.GetProcessMetrics(s=operation?,o=process?)* -> o: collect process performance data  
-M.GetUserIdleSeconds()* -> i: retrieve user idle time in seconds  
-M.JoinPathBlockingTraversal(s=basePath,s=fileName)* -> s: combine paths securely  
-M.GetUserNameFormat(i=format)* -> s: obtain formatted user name  
-M.ResolveCurrentUser()*: resolve current user details  
-M.TestLocalGroupMembership(s=GroupName)*: verify local group membership  
-M.ShowMessageBoxTimeout(s=Text,s=Caption?,o=Buttons?,s=Icon?,s=DefaultButton?,i=TimeoutSeconds?)* -> o: display timed message box  
-M.PlainTextToSecureString(s=plainString)* -> ss: convert plain text to SecureString  
-M.SecureStringToPlainText(ss=SecureString)* -> s: convert SecureString to plain text  
+M.ProcessLogMessage(s=MessageType,s=InputText,s=Parameters?,i=DebugLevel?)*: log message with optional formatting
+M.LogInfo(s=InputText,s=Parameters?)*: write informational log entry
+M.LogWarning(s=InputText,s=Parameters?)*: write warning log entry
+M.LogDebug(s=InputText,i=Level?=1)*: write debug log entry
+M.ReadINIFile(s=FileName)*: load INI settings into script variables
+M.ReadINIFileIfChanged(s=FileName)*: reload INI if modified
+M.FilterUnprintableChars(s=InputString,b=MultiLine?=false)*: strip non-printable characters
+M.ExtractPrintableCharsOnly(s=InputString)*: keep only printable characters
+M.FilterQuotes(s=InputString)*: remove quotation marks
+M.FilterNonAsciiChars(s=InputString)*: discard non-ASCII characters
+M.FilterSpaces(s=InputString)*: normalize whitespace
+M.MatchEmailInText(s=InputString)*: extract email address from text
+M.TestEmailAddress(s=InputString)*: validate email format
+M.NewRandomPassword(u=Minimum_Length,u=Maximum_Length?)*: generate random password
+M.GetTiming(b=ResetTimer=false)* start or record checkpoint
+MToDataTable=InputObject,oOutputTable?,=Retain?,b=WMIProperties?)* -> o: transform objects into DataTable
+M.ConvertToBase64String(s=inputText)* -> s: encode string to Base64
+M.ConvertFromBase64String(s=inputText)* -> s: decode Base64 to string
+M.ConvertToCliXMLString(o=inputText)* -> s: serialize object to CLI-XML
+M.ConvertFromCliXMLString(s=inputText)* -> o: deserialize CLI-XML to object
+M.Hex2Bytes(s=HexString)* -> a<byte>: convert HEX string to byte array
+M.Bytes2Hex(a<byte> BytesArr)* -> s: format bytes as HEX string
+M.Bytes2CRC32Hex(a<byte> BytesArr)* -> s: compute CRC32 hex digest
+M.IsAdministrator()*: check if current user is admin
+M.IsCertificatePrivateKeyExportable(o=Certificate)*: verify certificate key exportability
+M.EnsureFolderWithPermissions(s=FolderPath,o=SID?,b=AllowWrite?=false)*: create folder and set ACL
+M.GetProcessMetrics(s=operation?,o=process?)* -> o: collect process performance data
+M.GetUserIdleSeconds()* -> i: retrieve user idle time in seconds
+M.JoinPathBlockingTraversal(s=basePath,s=fileName)* -> s: combine paths securely
+M.GetUserNameFormat(i=format)* -> s: obtain formatted user name
+M.ResolveCurrentUser()*: resolve current user details
+M.TestLocalGroupMembership(s=GroupName)*: verify local group membership
+M.ShowMessageBoxTimeout(s=Text,s=Caption?,o=Buttons?,s=Icon?,s=DefaultButton?,i=TimeoutSeconds?)* -> o: display timed message box
+M.PlainTextToSecureString(s=plainString)* -> ss: convert plain text to SecureString
+M.SecureStringToPlainText(ss=SecureString)* -> s: convert SecureString to plain text
 M.ToLatinTransliteration(s=Text)* -> s: transliterate text to Latin characters
 #>
 class CommonClass {
     static [char[]]$BadParamsChars = """';`0".ToCharArray()
-    [string]$LogFileName = "logs\FunctionLog"
+    [string]$LogFileName = 'logs\FunctionLog'
     [bool]$WriteToLogFile = $false
     [string]$UserName = $null
     [string]$UserDomain = $null
@@ -270,10 +270,10 @@ class CommonClass {
     [string]$HostName = $null
     [datetime]$StartUpDateTime = [System.Datetime]::Now
     $ScriptPath = $null
-    [string]$LastDebugMessage = ""
-    [string]$LastErrorMessage = ""
-    [string]$LastWarningMessage = ""
-    [string]$LastInfoMessage = ""
+    [string]$LastDebugMessage = ''
+    [string]$LastErrorMessage = ''
+    [string]$LastWarningMessage = ''
+    [string]$LastInfoMessage = ''
     [int]$LastErrorLevel = 0
     [int]$dupDebugCount = 0
     [int]$dupWarningCount = 0
@@ -315,7 +315,7 @@ class CommonClass {
     hidden [System.UInt64]$IdleReconstructedLastInput64 = 0
     hidden [uint32]$IdlePrevLastTick32 = 0
     hidden [bool]$IdleStateInitialized = $false
-    hidden $_NativeMethodsType = $null    
+    hidden $_NativeMethodsType = $null
     hidden [string]$CachedLogFileName = $null
     hidden $FromHexStringMethod = $null
     hidden [type]$_DataTableHelperType = $null
@@ -332,17 +332,17 @@ class CommonClass {
         }
         $this.CurrentUserIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         $this.ResolveCurrentUser()
-        if (-Not $this.UserDomainFQDN -and $env:USERDNSDOMAIN) {
+        if (-not $this.UserDomainFQDN -and $env:USERDNSDOMAIN) {
             # FQDN stays empty when GetUserNameEx(12) fails (local accounts, workstations)
             $this.UserDomainFQDN = ($env:USERDNSDOMAIN -replace '[\\/:*?"<>|]', '_')
         }
-        if (-Not $this.UserName) {
+        if (-not $this.UserName) {
             $parts = $this.CurrentUserIdentity.Name.Split('\', 2)
             $this.UserName = $parts[1]
             $this.UserDomain = $parts[0]
             # Do not overwrite an already resolved FQDN; USERDNSDOMAIN is empty for
             # non-domain accounts and $null -replace would silently store an empty string
-            if (-Not $this.UserDomainFQDN -and $env:USERDNSDOMAIN) {
+            if (-not $this.UserDomainFQDN -and $env:USERDNSDOMAIN) {
                 $this.UserDomainFQDN = ($env:USERDNSDOMAIN -replace '[\\/:*?"<>|]', '_')
             }
         }
@@ -350,24 +350,24 @@ class CommonClass {
         $this.UnprintableCharsRegex = [regex]::new('[\p{C}-[\r\n]]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.plainTextOnlyRegEx = [regex]::new('\p{C}+', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.QuotesRegex = [regex]::new("['""]", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.NonAsciiCharsRegex = [regex]::new("[^\x20-\x7E]", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.SpacesRegex = [regex]::new("\s", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.MultiSpacesRegex = [regex]::new("\s{2,}", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.IntPatternRG = [regex]::new("^-?\d+$", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.DoublePatternRG = [regex]::new("^-?\d+\.\d+$", [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.NonAsciiCharsRegex = [regex]::new('[^\x20-\x7E]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.SpacesRegex = [regex]::new('\s', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.MultiSpacesRegex = [regex]::new('\s{2,}', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.IntPatternRG = [regex]::new('^-?\d+$', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.DoublePatternRG = [regex]::new('^-?\d+\.\d+$', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.EmailRG = [regex]::new('[a-z0-9!#\$%&''*+/=^_`{|}~-]+(?:\.[a-z0-9!#\$%&''*+/=^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?', [System.Text.RegularExpressions.RegexOptions]::Compiled -bor [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         $this.NonHEXSymbols = [regex]::new('[^0-9A-Fa-f]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         try {
             # GetHostEntry can throw in offline / DNS-restricted environments
-            $this.HostName = [System.Net.Dns]::GetHostEntry("localhost").HostName
+            $this.HostName = [System.Net.Dns]::GetHostEntry('localhost').HostName
         } catch {
             $this.HostName = $env:COMPUTERNAME
         }
-        $this.commentRG = [regex]::new("^\s*#", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.sectionRG = [regex]::new("^\s*\[([\w\d_]{2,})\]", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.varnameRG = [regex]::new("^\s*([\w\d_]{2,})\s*=\s*(.*)$", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.VarMultiLineStartRG = [regex]::new("^\s*([\w\d_]{2,})\s*=\s*@""", [System.Text.RegularExpressions.RegexOptions]::Compiled)
-        $this.VarMultiLineEndRG = [regex]::new("^\s*""@\s*$", [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.commentRG = [regex]::new('^\s*#', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.sectionRG = [regex]::new('^\s*\[([\w\d_]{2,})\]', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.varnameRG = [regex]::new('^\s*([\w\d_]{2,})\s*=\s*(.*)$', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.VarMultiLineStartRG = [regex]::new('^\s*([\w\d_]{2,})\s*=\s*@"', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+        $this.VarMultiLineEndRG = [regex]::new('^\s*"@\s*$', [System.Text.RegularExpressions.RegexOptions]::Compiled)
         $this.TranslitMap = [System.Collections.Generic.Dictionary[char, string]]::new()
         # Transliteration table (GOST 7.79-2000, system B)
         $map = $this.TranslitMap
@@ -416,15 +416,15 @@ class CommonClass {
         $colorName = $null
         $logOnly = $false
 
-        if ($MessageType -eq "Debug" -and $this.CurrentDebugLevel -lt $DebugLevel) {
+        if ($MessageType -eq 'Debug' -and $this.CurrentDebugLevel -lt $DebugLevel) {
             return
         }
 
         if ($Parameters -and $Parameters.IndexOfAny([CommonClass]::BadParamsChars) -ge 0) {
-            $Parameters = ""
+            $Parameters = ''
         }
 
-        $isMultiline = $Parameters -and $Parameters.Contains("multiline")
+        $isMultiline = $Parameters -and $Parameters.Contains('multiline')
 
         $filteredText = if ($isMultiline) {
             $this.FilterUnprintableChars($InputText, $true)
@@ -435,7 +435,7 @@ class CommonClass {
         $currentTime = [DateTime]::Now
 
         switch ($MessageType) {
-            "Info" {
+            'Info' {
                 $isDuplicate = $filteredText -eq $this.LastInfoMessage
                 if ($isDuplicate) {
                     $this.dupInfoCount++
@@ -445,7 +445,7 @@ class CommonClass {
                     $this.LastInfoTime = $currentTime
                 }
             }
-            "Warning" {
+            'Warning' {
                 if ($this.LastWarningTime -gt [datetime]::MinValue -and ($currentTime - $this.LastWarningTime).TotalMinutes -gt 10) {
                     # Reset duplicate tracking after 10 minutes to re-alert admins
                     $this.dupWarningCount = 0
@@ -461,7 +461,7 @@ class CommonClass {
                     $this.LastWarningTime = $currentTime
                 }
             }
-            "Debug" {
+            'Debug' {
                 $isDuplicate = $filteredText -eq $this.LastDebugMessage
                 if ($isDuplicate) {
                     $this.dupDebugCount++
@@ -475,37 +475,37 @@ class CommonClass {
 
         if ($isDuplicate) {
             switch ($MessageType) {
-                "Info" {
+                'Info' {
                     if ($this.LastInfoTime -and ($currentTime - $this.LastInfoTime).TotalSeconds -le 5) {
                         return
                     }
                     if ($this.dupInfoCount -ge 2) {
                         if ($this.dupInfoCount -eq 2) {
-                            $filteredText = "Duplicate log messages detected. Further logging of this message suppressed."
+                            $filteredText = 'Duplicate log messages detected. Further logging of this message suppressed.'
                         } else {
                             return
                         }
                     }
                 }
-                "Warning" {
+                'Warning' {
                     if ($this.LastWarningTime -and ($currentTime - $this.LastWarningTime).TotalSeconds -le 5) {
                         return
                     }
                     if ($this.dupWarningCount -ge 2) {
                         if ($this.dupWarningCount -eq 2) {
-                            $filteredText = "Duplicate log messages detected. Further logging of this message suppressed."
+                            $filteredText = 'Duplicate log messages detected. Further logging of this message suppressed.'
                         } else {
                             return
                         }
                     }
                 }
-                "Debug" {
+                'Debug' {
                     if ($this.LastDebugTime -and ($currentTime - $this.LastDebugTime).TotalSeconds -le 5) {
                         return
                     }
                     if ($this.dupDebugCount -ge 2) {
                         if ($this.dupDebugCount -eq 2) {
-                            $filteredText = "Duplicate log messages detected. Further logging of this message suppressed."
+                            $filteredText = 'Duplicate log messages detected. Further logging of this message suppressed.'
                         } else {
                             return
                         }
@@ -524,26 +524,23 @@ class CommonClass {
             for ($i = 0; $i -lt $paramParts.Length; $i++) {
                 $currentParam = $paramParts[$i]
 
-                if (($currentParam -eq "-Fore" -or $currentParam -eq "-ForegroundColor") -and $i -lt ($paramParts.Length - 1)) {
+                if (($currentParam -eq '-Fore' -or $currentParam -eq '-ForegroundColor') -and $i -lt ($paramParts.Length - 1)) {
                     $colorName = $paramParts[$i + 1]
                     try {
                         $writeHostParams.ForegroundColor = [ConsoleColor]$colorName
                         $i++
                     } catch {
                     }
-                }
-                elseif (($currentParam -eq "-Back" -or $currentParam -eq "-BackgroundColor") -and $i -lt ($paramParts.Length - 1)) {
+                } elseif (($currentParam -eq '-Back' -or $currentParam -eq '-BackgroundColor') -and $i -lt ($paramParts.Length - 1)) {
                     $colorName = $paramParts[$i + 1]
                     try {
                         $writeHostParams.BackgroundColor = [ConsoleColor]$colorName
                         $i++
                     } catch {
                     }
-                }
-                elseif ($currentParam -eq "-NoNewline") {
+                } elseif ($currentParam -eq '-NoNewline') {
                     $writeHostParams.NoNewline = $true
-                }
-                elseif ($currentParam -eq "LogOnly") {
+                } elseif ($currentParam -eq 'LogOnly') {
                     $logOnly = $true
                 }
             }
@@ -551,23 +548,21 @@ class CommonClass {
 
         if (-not $logOnly) {
             switch ($MessageType) {
-                "Info" { Write-Host $finalText @writeHostParams }
-                "Warning" { Write-Warning $finalText }
-                "Debug" { Write-Host $finalText @writeHostParams }
+                'Info' { Write-Host $finalText @writeHostParams }
+                'Warning' { Write-Warning $finalText }
+                'Debug' { Write-Host $finalText @writeHostParams }
             }
         }
 
         if ($this.WriteToLogFile) {
-            $timestamp = [System.DateTime]::Now.ToString("yyyy-MM-dd HH-mm")            
+            $timestamp = [System.DateTime]::Now.ToString('yyyy-MM-dd HH-mm')
             if (-not $this.CachedLogFileName) {
                 # Anchor once to an absolute path so later CWD changes do not split the log across locations
                 $this.CachedLogFileName = [System.IO.Path]::GetFullPath("$($this.LogFileName)_$($this.StartUpDateTime.toString('yyyy-MM-dd_HH-mm'))_$($this.UserName).log")
-                # AppendAllText creates the file but not the directory
-                $null = [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($this.CachedLogFileName))
             }
             $LCLLogFileName = $this.CachedLogFileName
 
-            $logEntry = if ($MessageType -eq "Warning") {
+            $logEntry = if ($MessageType -eq 'Warning') {
                 "$timestamp WARNING! $finalText"
             } else {
                 "$timestamp $finalText"
@@ -584,7 +579,7 @@ class CommonClass {
         $this.ProcessLogMessage($MessageType, $InputText, $Parameters, 1)
     }
     [void] ProcessLogMessage([string]$MessageType, [string]$InputText) {
-        $this.ProcessLogMessage($MessageType, $InputText, "", 1)
+        $this.ProcessLogMessage($MessageType, $InputText, '', 1)
     }
     <#
     .SYNOPSIS
@@ -597,24 +592,24 @@ class CommonClass {
     .PARAMETER Parameters
         Optional formatting parameters as a space-separated string. Supported values:
         - "-Fore COLOR"    - Sets foreground color (e.g., "-Fore GREEN", "-Fore CYAN")
-        - "-Back COLOR"    - Sets background color (e.g., "-Back BLACK", "-Back RED")  
+        - "-Back COLOR"    - Sets background color (e.g., "-Back BLACK", "-Back RED")
         - "LogOnly"        - Writes only to log file, not to console
         - "multiline"      - Collapses repeated blank lines in the message (affects both console and log)
-        
-        Color options: Black, DarkBlue, DarkGreen, DarkCyan, DarkRed, DarkMagenta, 
+
+        Color options: Black, DarkBlue, DarkGreen, DarkCyan, DarkRed, DarkMagenta,
         DarkYellow, Gray, DarkGray, Blue, Green, Cyan, Red, Magenta, Yellow, White.
     .EXAMPLE
         $CommonObj.LogInfo("Operation completed successfully", "-Fore GREEN")
-    .EXAMPLE  
+    .EXAMPLE
         $CommonObj.LogInfo("User profile loaded", "LogOnly")
     .EXAMPLE
         $CommonObj.LogInfo("Multi-line`r`ncontent", "multiline -Fore CYAN")
     #>
     [void] LogInfo($InputText, $Parameters) {
-        $this.ProcessLogMessage("Info", $InputText, $Parameters)
+        $this.ProcessLogMessage('Info', $InputText, $Parameters)
     }
     [void] LogInfo($InputText) {
-        $this.ProcessLogMessage("Info", $InputText, "")
+        $this.ProcessLogMessage('Info', $InputText, '')
     }
     <#
     .SYNOPSIS
@@ -636,10 +631,10 @@ class CommonClass {
         use system warning formatting in console.
     #>
     [void] LogWarning($InputText, $Parameters) {
-        $this.ProcessLogMessage("Warning", $InputText, $Parameters)
+        $this.ProcessLogMessage('Warning', $InputText, $Parameters)
     }
     [void] LogWarning($InputText) {
-        $this.ProcessLogMessage("Warning", $InputText, "")
+        $this.ProcessLogMessage('Warning', $InputText, '')
     }
     <#
     .SYNOPSIS
@@ -663,7 +658,7 @@ class CommonClass {
         Set $CommonObj.CurrentDebugLevel to control which messages are displayed.
     #>
     [void] LogDebug($InputText, $Level) {
-        $this.ProcessLogMessage("Debug", $InputText, "", $Level)
+        $this.ProcessLogMessage('Debug', $InputText, '', $Level)
     }
     [void] LogDebug($InputText) {
         $this.LogDebug($InputText, 1)
@@ -676,7 +671,7 @@ class CommonClass {
     # [SMTPServer]
     # Login=Security-Center
     # From=Security-Center@eurosib-hydro.ru
-    # Will be loaded as ${script:INI-General-DebugLevel} and ${script:INI-SMTPServer-Login} and ${script:INI-SMTPServer-FROM} variables 
+    # Will be loaded as ${script:INI-General-DebugLevel} and ${script:INI-SMTPServer-Login} and ${script:INI-SMTPServer-FROM} variables
     # Those will be available to any procedure in script
     # Multiline are supported
     #    ParameterMultiline=@"
@@ -689,8 +684,8 @@ class CommonClass {
             $this.LogInfo("INI file not found: $FileName")
             return
         }
-        
-        $section = "default"
+
+        $section = 'default'
         $varCount = 0
         # Per-file tracking of set variables: allows cleaning up sections/params deleted from the file on re-read
         $normalizedPath = [System.IO.Path]::GetFullPath($FileName)
@@ -738,7 +733,7 @@ class CommonClass {
             if ($sectionMatch.Success) {
                 $section = $sectionMatch.Groups[1].Value
                 # No per-section cleanup here: parameters/sections deleted from the file
-                # are swept at the end of this method, without touching other files' variables                
+                # are swept at the end of this method, without touching other files' variables
                 continue
             }
 
@@ -764,7 +759,7 @@ class CommonClass {
                 }
 
                 # Type guard: a non-numeric string like "abc" would otherwise pass "$value -gt 0" in PowerShell
-                if ($paramName -eq "DebugLevel" -and $value -is [int] -and $value -gt 0) {
+                if ($paramName -eq 'DebugLevel' -and $value -is [int] -and $value -gt 0) {
                     $this.CurrentDebugLevel = $value
                 }
 
@@ -799,7 +794,7 @@ class CommonClass {
             $this.LogInfo("$staleVarCount stale variable(s) removed from previous INI content.")
         }
     }
-    
+
     # Checks if a INI file is changed and reads settings from it
     # Returns $true if the file was (re)read, $false if unchanged since the last read, $null if the file was not found
     [Nullable[bool]] ReadINIFileIfChanged($FileName) {
@@ -824,9 +819,9 @@ class CommonClass {
     }
     [string] FilterUnprintableChars([string]$InputString, [bool]$MultiLine) {
         if ($MultiLine) {
-            return $this.MultiLineRegex.Replace(($this.UnprintableCharsRegex.Replace($InputString, "")), "`r`n")
+            return $this.MultiLineRegex.Replace(($this.UnprintableCharsRegex.Replace($InputString, '')), "`r`n")
         } else {
-            return $this.UnprintableCharsRegex.Replace($InputString, "")
+            return $this.UnprintableCharsRegex.Replace($InputString, '')
         }
     }
     [string] FilterUnprintableChars([string]$InputString) {
@@ -841,13 +836,13 @@ class CommonClass {
         return $tmp.Trim()
     }
     [string] FilterQuotes([string]$InputString) {
-        return $this.QuotesRegex.Replace($InputString, "")
+        return $this.QuotesRegex.Replace($InputString, '')
     }
     [string] FilterNonAsciiChars([string]$InputString) {
-        return $this.NonAsciiCharsRegex.Replace($InputString, "")
+        return $this.NonAsciiCharsRegex.Replace($InputString, '')
     }
     [string] FilterSpaces([string]$InputString) {
-        return $this.SpacesRegex.Replace($InputString, "")
+        return $this.SpacesRegex.Replace($InputString, '')
     }
     # Matches Email in text and returns it if found. If not - returns null
     [string] MatchEmailInText([string]$InputString) {
@@ -869,14 +864,21 @@ class CommonClass {
             return $false
         }
     }
-    # Random password generator with approximate length calculated from the specified minimum and maximum length
-    # Excluded confusables: digit 0; uppercase I, O, S; lowercase i, l, o. Symbols: ! # $ & + -
+    # Random password generator with the length drawn strictly within the specified minimum and maximum length. Bullet-proof: the result always contains at least one uppercase letter, one lowercase letter, one digit and one special character, and never repeats the same character more than twice in a row. Excluded confusables: digit 0; uppercase I, O, S; lowercase i, l, o. Symbols: ! # $ & + -
     [string] NewRandomPassword([uint16]$Minimum_Length, [uint16]$Maximum_Length) {
         [uint16]$Current_Length = 0
         if ($Maximum_Length -gt $Minimum_Length -and $Maximum_Length -gt 1) {
-            $Current_Length = Get-Random -Minimum $Minimum_Length -Maximum ($Maximum_Length + 1)
+            # Get-Random with -Minimum/-Maximum can, due to floating-point scaling, return a value equal to the (exclusive) upper bound, which once produced a 17-char PIN from (13,16) and a CKR_PIN_LEN_RANGE failure; array-based -InputObject selection is immune to that bug and stays strictly inside the requested range
+            [uint16]$Current_Length = Get-Random -InputObject ($Minimum_Length..$Maximum_Length)
         } else {
             $Current_Length = $Minimum_Length
+        }
+        # Hard guarantee: the length always stays within the requested bounds, whatever the draw did
+        if ($Current_Length -gt $Maximum_Length) { $Current_Length = $Maximum_Length }
+        if ($Current_Length -lt $Minimum_Length) { $Current_Length = $Minimum_Length }
+        # A shorter password can never host one character from each mandatory category
+        if ($Current_Length -lt 4) {
+            throw [System.ArgumentException]::new("NewRandomPassword: length $Current_Length cannot guarantee one uppercase letter, one lowercase letter, one digit and one special character (minimum allowed length is 4).")
         }
 
         # Lazy-initialized once and reused across all subsequent calls
@@ -885,26 +887,44 @@ class CommonClass {
         }
 
         [int]$poolSize = $this.PasswordCharCodes.Length
-        $sb = [System.Text.StringBuilder]::new($Current_Length)
-
-        if ($this.isPS7OrNewer -and [System.Security.Cryptography.RandomNumberGenerator].GetMethod("GetInt32", [Type[]]@([int]))) {
-            # PS 7.2+ (.NET 6+): fast cryptographic GetInt32; PS 7.0/7.1 fall through to the byte-array branch
-            for ([uint16]$i = 0; $i -lt $Current_Length; $i++) {
-                $randomIndex = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($poolSize)
-                $null = $sb.Append([char]$this.PasswordCharCodes[$randomIndex])
-            }
-        } else {
-            # PS5.1: Fallback to byte array generation (single RNG call for the whole password)
+        # PS 7.2+ (.NET 6+): fast cryptographic GetInt32; PS 7.0/7.1 fall through to the byte-array branch
+        [bool]$useFastRng = $this.isPS7OrNewer -and [System.Security.Cryptography.RandomNumberGenerator].GetMethod('GetInt32', [Type[]]@([int]))
+        $rng = $null
+        $randomBytes = $null
+        if (-not $useFastRng) {
+            # PS5.1: byte array generation (one GetBytes call per candidate, the buffer is reused across attempts)
             $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
             $randomBytes = New-Object byte[] (4 * $Current_Length)
-            $rng.GetBytes($randomBytes)
-            $rng.Dispose()
-            for ([uint16]$i = 0; $i -lt $Current_Length; $i++) {
-                $randomIndex = [BitConverter]::ToUInt32($randomBytes, 4 * $i) % $poolSize
-                $null = $sb.Append([char]$this.PasswordCharCodes[$randomIndex])
-            }
         }
-        return $sb.ToString()
+        try {
+            # Rejection sampling: candidates are drawn uniformly from the full pool until one passes TestPasswordPolicy, which keeps the distribution uniform over policy-compliant passwords; exhausting the attempt cap is astronomically unlikely
+            for ([int]$attempt = 1; $attempt -le 1000; $attempt++) {
+                $sb = [System.Text.StringBuilder]::new($Current_Length)
+                if ($useFastRng) {
+                    for ([uint16]$i = 0; $i -lt $Current_Length; $i++) {
+                        $randomIndex = [System.Security.Cryptography.RandomNumberGenerator]::GetInt32($poolSize)
+                        $null = $sb.Append([char]$this.PasswordCharCodes[$randomIndex])
+                    }
+                } else {
+                    $rng.GetBytes($randomBytes)
+                    for ([uint16]$i = 0; $i -lt $Current_Length; $i++) {
+                        $randomIndex = [BitConverter]::ToUInt32($randomBytes, 4 * $i) % $poolSize
+                        $null = $sb.Append([char]$this.PasswordCharCodes[$randomIndex])
+                    }
+                }
+                $candidate = $sb.ToString()
+                if ($this.TestPasswordPolicy($candidate)) { return $candidate }
+            }
+        } finally {
+            if ($rng) { $rng.Dispose() }
+        }
+        throw [System.InvalidOperationException]::new('NewRandomPassword: failed to generate a policy-compliant password after 1000 attempts.')
+    }
+
+    # Mandatory password policy for NewRandomPassword: at least one uppercase letter, one lowercase letter, one digit and one special character, and no more than two identical characters in a row
+    hidden [bool] TestPasswordPolicy([string]$Password) {
+        if ([string]::IsNullOrEmpty($Password) -or $Password.Length -lt 4) { return $false }
+        return ($Password -cmatch '[A-Z]' -and $Password -cmatch '[a-z]' -and $Password -cmatch '[0-9]' -and $Password -cmatch '[^A-Za-z0-9]' -and $Password -cnotmatch '(.)\1\1')
     }
 
     [string] NewRandomPassword([uint16]$Minimum_Length) {
@@ -936,25 +956,25 @@ class CommonClass {
     [void] GetTiming() {
         $this.GetTiming($false)
     }
-	<#
-		.SYNOPSIS
-			Converts objects into a DataTable. 
+    <#
+        .SYNOPSIS
+            Converts objects into a DataTable.
             Accelerated C# bulk converter (compiled once per session via Add-Type).
-		.DESCRIPTION
-			Converts objects into a DataTable, which are used for DataBinding.
-		.PARAMETER  InputObject
-			The input to convert into a DataTable.
+        .DESCRIPTION
+            Converts objects into a DataTable, which are used for DataBinding.
+        .PARAMETER  InputObject
+            The input to convert into a DataTable.
         .PARAMETER  OutputTable
             The DataTable you wish to load the input into.
-		.PARAMETER RetainColumns
-			This switch tells the function to keep the DataTable's existing columns.
-		.PARAMETER FilterWMIProperties
-			This switch removes WMI properties that start with an underline.
-		.EXAMPLE
-			$DataTable = $CommonObj.ConvertToDataTable((Get-Process))
-	#>
+        .PARAMETER RetainColumns
+            This switch tells the function to keep the DataTable's existing columns.
+        .PARAMETER FilterWMIProperties
+            This switch removes WMI properties that start with an underline.
+        .EXAMPLE
+            $DataTable = $CommonObj.ConvertToDataTable((Get-Process))
+    #>
     [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable, [bool]$RetainColumns, [bool]$FilterWMIProperties) {
-        if (-Not $InputObject) { return $null }
+        if (-not $InputObject) { return $null }
         if ($InputObject -is [System.Data.DataTable]) { return $InputObject }
 
         if (-not $this._DataTableHelperType) {
@@ -1105,7 +1125,7 @@ public static class CommonClassDataTableHelper
                 # (System.Data on PS 5.1 vs System.Data.Common on PS 7, GAC vs $PSHOME paths)
                 $refs = @(
                     [object].Assembly.Location
-                    [System.Collections.Generic.Dictionary[string,int]].Assembly.Location
+                    [System.Collections.Generic.Dictionary[string, int]].Assembly.Location
                     [System.StringComparer].Assembly.Location
                     [System.Data.DataTable].Assembly.Location
                     [System.Management.Automation.PSObject].Assembly.Location
@@ -1143,22 +1163,22 @@ public static class CommonClassDataTableHelper
     }
     [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable, [bool]$RetainColumns) {
         return $this.ConvertToDataTable($InputObject, $OutputTable, $RetainColumns, $false)
-    }    
+    }
     [System.Data.DataTable] ConvertToDataTable($InputObject, [System.Data.DataTable]$OutputTable) {
         return $this.ConvertToDataTable($InputObject, $OutputTable, $false, $false)
-    }    
+    }
     [System.Data.DataTable] ConvertToDataTable($InputObject) {
         return $this.ConvertToDataTable($InputObject, $null, $false, $false)
-    }    
+    }
     # Converts UTF8 string to a base64 encoded form
     [string] ConvertToBase64String([string]$inputText) {
         return [System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($inputText))
     }
     # Converts back base64 encoded to a UTF8 string
     [string] ConvertFromBase64String([string]$inputText) {
-        Try {
+        try {
             return [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($inputText))
-        } Catch { }
+        } catch { }
         return $null
     }
     # Converts any object to a Cli XML String
@@ -1167,22 +1187,22 @@ public static class CommonClassDataTableHelper
     }
     # Converts any CliXML String to an object
     [object] ConvertFromCliXMLString([string]$inputText) {
-        Try {
+        try {
             return [System.Management.Automation.PSSerializer]::DeSerialize($inputText)
-        } Catch { }
+        } catch { }
         return $null
     }
     # Converts any HEX String to a byte array. $null returned if input not a hex string
     [byte[]] Hex2Bytes([string]$HexString) {
         # Regex.Replace throws ArgumentNullException on a null input
         if ([string]::IsNullOrEmpty($HexString)) { return $null }
-        $cleanHex = $this.NonHEXSymbols.Replace($HexString, "")
+        $cleanHex = $this.NonHEXSymbols.Replace($HexString, '')
         # Input containing no hex digits at all must yield $null, not an empty array
         if ($cleanHex.Length -eq 0 -or $cleanHex.Length % 2 -ne 0) { return $null }
         try {
             # .NET 5+ FromHexString method if available; reflection result is cached
             if (-not $this.FromHexStringMethod) {
-                $this.FromHexStringMethod = [System.Convert].GetMethod("FromHexString", [Type[]]@([string]))
+                $this.FromHexStringMethod = [System.Convert].GetMethod('FromHexString', [Type[]]@([string]))
             }
             if ($this.FromHexStringMethod) {
                 return $this.FromHexStringMethod.Invoke($null, @($cleanHex))
@@ -1193,27 +1213,27 @@ public static class CommonClassDataTableHelper
                 $arr[$i / 2] = [System.Convert]::ToByte($cleanHex.Substring($i, 2), 16)
             }
             return $arr
-        } Catch {
+        } catch {
             return $null
         }
     }
     # Converts a byte array to an uppercase HEX string without separators (inverse of Hex2Bytes)
     [string] Bytes2Hex([byte[]]$BytesArr) {
-         return ([System.BitConverter]::ToString($BytesArr))
+        return ([System.BitConverter]::ToString($BytesArr))
     }
     # Computes CRC32 of any input byte array
     [string] Bytes2CRC32Hex([byte[]]$BytesArr) {
-        if ($null -eq $BytesArr -or $BytesArr.Count -eq 0) { return "00000000" }
+        if ($null -eq $BytesArr -or $BytesArr.Count -eq 0) { return '00000000' }
 
         # Resolve type dynamically at runtime to bypass parser errors in PS 5.1; result cached
         $crcType = $this.Crc32Managed
-        
+
         if (-not $crcType) {
-            Add-Type -TypeDefinition @"
+            Add-Type -TypeDefinition @'
                 using System;
                 public static class SafeManagedCrc32 {
                     private static readonly uint[] Table;
-                    
+
                     static SafeManagedCrc32() {
                         Table = new uint[256];
                         uint polynomial = 0xEDB88320;
@@ -1225,7 +1245,7 @@ public static class CommonClassDataTableHelper
                             Table[i] = crc;
                         }
                     }
-                    
+
                     public static uint Compute(byte[] bytes) {
                         uint crc = 0xFFFFFFFF;
                         foreach (byte b in bytes) {
@@ -1234,14 +1254,14 @@ public static class CommonClassDataTableHelper
                         return crc ^ 0xFFFFFFFF;
                     }
                 }
-"@
+'@
             # Re-evaluate type after Add-Type
             $crcType = 'SafeManagedCrc32' -as [type]
         }
-        
+
         # Store and use the Type object directly
         $this.Crc32Managed = $crcType
-        return $this.Crc32Managed::Compute($BytesArr).ToString("X8")
+        return $this.Crc32Managed::Compute($BytesArr).ToString('X8')
     }
     # Determine if current user has administrator role and returns true or false
     [bool] IsAdministrator() {
@@ -1272,7 +1292,7 @@ public static class CommonClassDataTableHelper
     [void] EnsureFolderWithPermissions([string]$FolderPath, $SID, [bool]$AllowWrite) {
         # Reset the error state so the caller sees the result of THIS call, not a stale failure
         $this.LastErrorLevel = 0
-        $this.LastErrorMessage = ""
+        $this.LastErrorMessage = ''
         $acl = $null
         $sidObject = $null
         $rights = $null
@@ -1321,8 +1341,7 @@ public static class CommonClassDataTableHelper
                     # Exact rule already present - nothing to do.
                     $exists = $true
                     break
-                }
-                elseif ($sameSid -and $sameRight -and $isAllow) {
+                } elseif ($sameSid -and $sameRight -and $isAllow) {
                     # A rule for the same SID/rights exists but its write flag does NOT match the requested state - remove it so we can add the correct one.
                     $acl.RemoveAccessRule($rule) | Out-Null
                 }
@@ -1331,7 +1350,7 @@ public static class CommonClassDataTableHelper
             if (-not $exists) {
                 $acl.AddAccessRule($accessRule)
                 Set-Acl -Path $FolderPath -AclObject $acl
-                Write-Host "Read$(if ($AllowWrite) {" and write"}) permissions for $($FolderPath) granted for SID: $SID"
+                Write-Host "Read$(if ($AllowWrite) {' and write'}) permissions for $($FolderPath) granted for SID: $SID"
             }
         } catch {
             # Record the failure state for callers that check it
@@ -1347,30 +1366,30 @@ public static class CommonClassDataTableHelper
     [pscustomobject] GetProcessMetrics([string]$operation, $process) {
         $process.Refresh()
         return [pscustomobject]@{
-            Operation          = $operation
-            Timestamp          = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-            ProcessId          = $process.Id
-            Handles            = $process.HandleCount
-            ThreadCount        = $process.Threads.Count
-            WorkingSet_KB      = [math]::Round($process.WorkingSet64 / 1KB, 2)
-            PrivateMemory_KB   = [math]::Round($process.PrivateMemorySize64 / 1KB, 2)
-            VirtualMemory_KB   = [math]::Round($process.VirtualMemorySize64 / 1KB, 2)
-            PagedMemory_KB     = [math]::Round($process.PagedMemorySize64 / 1KB, 2)
-            CPU_s              = [math]::Round($process.TotalProcessorTime.TotalSeconds, 3)
-            GC_TotalMemory_KB  = [math]::Round([GC]::GetTotalMemory($false) / 1KB, 2)
+            Operation = $operation
+            Timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+            ProcessId = $process.Id
+            Handles = $process.HandleCount
+            ThreadCount = $process.Threads.Count
+            WorkingSet_KB = [math]::Round($process.WorkingSet64 / 1KB, 2)
+            PrivateMemory_KB = [math]::Round($process.PrivateMemorySize64 / 1KB, 2)
+            VirtualMemory_KB = [math]::Round($process.VirtualMemorySize64 / 1KB, 2)
+            PagedMemory_KB = [math]::Round($process.PagedMemorySize64 / 1KB, 2)
+            CPU_s = [math]::Round($process.TotalProcessorTime.TotalSeconds, 3)
+            GC_TotalMemory_KB = [math]::Round([GC]::GetTotalMemory($false) / 1KB, 2)
             GC_Gen0Collections = [GC]::CollectionCount(0)
             GC_Gen1Collections = [GC]::CollectionCount(1)
             GC_Gen2Collections = [GC]::CollectionCount(2)
         }
     }
-    
+
     [pscustomobject] GetProcessMetrics([string]$operation) {
         $process = [System.Diagnostics.Process]::GetCurrentProcess()
         return $this.GetProcessMetrics($operation, $process)
     }
     [pscustomobject] GetProcessMetrics() {
         $process = [System.Diagnostics.Process]::GetCurrentProcess()
-        return $this.GetProcessMetrics("not specified", $process)
+        return $this.GetProcessMetrics('not specified', $process)
     }
     # Returns number of seconds current user is IDLE (not using mouse/keyboard) in seconds
     [int] GetUserIdleSeconds() {
@@ -1378,7 +1397,7 @@ public static class CommonClassDataTableHelper
         $idleType = $this._IdleNativeType
         if (-not $idleType) {
             # Define Win32 API wrappers. GetTickCount64 is 64-bit and never wraps. GetLastInputInfo is 32-bit and wraps every 49.7 days.
-            Add-Type @"
+            Add-Type @'
                 using System;
                 using System.Runtime.InteropServices;
                 public static class IdleNative {
@@ -1392,7 +1411,7 @@ public static class CommonClassDataTableHelper
                     [DllImport("kernel32.dll")]
                     public static extern ulong GetTickCount64();
                 }
-"@
+'@
             $idleType = 'IdleNative' -as [type]
         }
         # Cache resolved types once; reused on subsequent calls.
@@ -1409,7 +1428,7 @@ public static class CommonClassDataTableHelper
         $localInputInfo = $this.LastInputInfo
         # Call Win32 API. It will correctly update the local variable's dwTime.
         if (-not $this._IdleNativeType::GetLastInputInfo([ref]$localInputInfo)) {
-            throw "GetLastInputInfo API call failed"
+            throw 'GetLastInputInfo API call failed'
         }
         # Get current 64-bit system uptime in milliseconds.
         $tick64 = $this._IdleNativeType::GetTickCount64()
@@ -1443,14 +1462,14 @@ public static class CommonClassDataTableHelper
         $resolvedPath = [System.IO.Path]::GetFullPath($combinedPath)
         $normalizedBaseWithSlash = $normalizedBase.TrimEnd('\') + '\'
         if (-not $resolvedPath.StartsWith($normalizedBaseWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $this.LogWarning("Error! Path traversal technique detected (JPBPT1)")
+            $this.LogWarning('Error! Path traversal technique detected (JPBPT1)')
             return $null
         }
         return $resolvedPath
     }
     hidden [string] GetUserNameFormat([int]$format) {
         if (-not $this.UserAPITypesAdded) {
-            Add-Type @"
+            Add-Type @'
                 using System;
                 using System.Runtime.InteropServices;
                 using System.Text;
@@ -1458,8 +1477,8 @@ public static class CommonClassDataTableHelper
                     [DllImport("secur32.dll", CharSet = CharSet.Auto)]
                     public static extern int GetUserNameEx(int nameFormat, StringBuilder userName, ref int userNameSize);
                 }
-"@
-            $this._UserAPIType = [type]"UserAPI"
+'@
+            $this._UserAPIType = [type]'UserAPI'
             $this.UserAPITypesAdded = $true
         }
 
@@ -1503,8 +1522,7 @@ public static class CommonClassDataTableHelper
             $members = Get-LocalGroupMember -Name $GroupName
             $currentUser = $this.CurrentUserIdentity.Name
             return $members.Name -contains $currentUser
-        }
-        catch {
+        } catch {
             return $false
         }
     }
@@ -1534,11 +1552,11 @@ public static class CommonClassDataTableHelper
         Returns user's selection: "OK", "Yes", "No", "Cancel", "Retry", "Abort", "Ignore", "Timeout"
     #>
     [object] ShowMessageBoxTimeout(
-        [string] $Text, 
-        [string] $Caption, 
-        [object]$Buttons, 
-        [string]$Icon, 
-        [string]$DefaultButton, 
+        [string] $Text,
+        [string] $Caption,
+        [object]$Buttons,
+        [string]$Icon,
+        [string]$DefaultButton,
         [int]$TimeoutSeconds
     ) {
         # Bypass PS parser errors: Load WinForms assembly dynamically if it's not loaded yet
@@ -1548,13 +1566,13 @@ public static class CommonClassDataTableHelper
         # Resolve enum types at runtime to avoid parser errors
         $drType = 'System.Windows.Forms.DialogResult' -as [type]
         $btnType = 'System.Windows.Forms.MessageBoxButtons' -as [type]
-        
+
         # Safely parse the $Buttons input (can be string, int, or enum) into the actual enum
         $ButtonsEnum = [System.Enum]::Parse($btnType, [string]$Buttons, $true)
 
         # Bypass PS 5.1 parser error: use '-as [type]' for NativeMethods
         $nativeType = 'NativeMethods' -as [type]
-        
+
         if (-not $nativeType) {
             Add-Type @'
                 using System;
@@ -1582,20 +1600,20 @@ public static class CommonClassDataTableHelper
 
         # Build the uType flag for the WinAPI call (buttons + icon + default button)
         $mbButtons = @{
-            OK               = 0x00000000
-            OKCancel         = 0x00000001
+            OK = 0x00000000
+            OKCancel = 0x00000001
             AbortRetryIgnore = 0x00000002
-            YesNoCancel      = 0x00000003
-            YesNo            = 0x00000004
-            RetryCancel      = 0x00000005
+            YesNoCancel = 0x00000003
+            YesNo = 0x00000004
+            RetryCancel = 0x00000005
         }
 
         $mbIcons = @{
-            None        = 0x00000000
-            Hand        = 0x00000010   # Stop / Error
-            Question    = 0x00000020
+            None = 0x00000000
+            Hand = 0x00000010   # Stop / Error
+            Question = 0x00000020
             Exclamation = 0x00000030   # Warning
-            Asterisk    = 0x00000040   # Information
+            Asterisk = 0x00000040   # Information
         }
 
         $mbDefBtn = @{
@@ -1607,17 +1625,17 @@ public static class CommonClassDataTableHelper
 
         # Convert the resolved enum to string to look up the corresponding WinAPI constant
         $buttonFlag = $mbButtons[[string]$ButtonsEnum]
-        
-        $iconFlag   = switch ($Icon) {
-            'Stop'        { $mbIcons['Hand']        }
-            'Error'       { $mbIcons['Hand']        }
-            'Question'    { $mbIcons['Question']    }
+
+        $iconFlag = switch ($Icon) {
+            'Stop' { $mbIcons['Hand'] }
+            'Error' { $mbIcons['Hand'] }
+            'Question' { $mbIcons['Question'] }
             'Exclamation' { $mbIcons['Exclamation'] }
-            'Warning'     { $mbIcons['Exclamation'] }
-            'Information' { $mbIcons['Asterisk']    }
-            default       { $mbIcons['None']        }
+            'Warning' { $mbIcons['Exclamation'] }
+            'Information' { $mbIcons['Asterisk'] }
+            default { $mbIcons['None'] }
         }
-        
+
         $defBtnFlag = $mbDefBtn[[string]$DefaultButton]
 
         $uType = $buttonFlag -bor $iconFlag -bor $defBtnFlag
@@ -1644,7 +1662,7 @@ public static class CommonClassDataTableHelper
             5 { return $drType::Ignore }
             6 { return $drType::Yes }
             7 { return $drType::No }
-            32000 { return "Timeout" }
+            32000 { return 'Timeout' }
             default { return $drType::None }
         }
         return $null
@@ -1682,13 +1700,13 @@ public static class CommonClassDataTableHelper
         $map = $this.TranslitMap
         $result = [System.Text.StringBuilder]::new($Text.Length * 2)
         $len = $Text.Length
-        
+
         # Using a for loop and .Chars($i) is the fastest way to retrieve a System.Char in PowerShell
         for ($i = 0; $i -lt $len; $i++) {
             $char = $Text.Chars($i)
             $lowerChar = [char]::ToLowerInvariant($char)
             $translit = $null
-            
+
             if ($map.TryGetValue($lowerChar, [ref]$translit)) {
                 if ($translit.Length -gt 0) {
                     if ([char]::IsUpper($char)) {
@@ -1705,7 +1723,7 @@ public static class CommonClassDataTableHelper
                 $null = $result.Append($char)
             }
         }
-        
+
         return $result.ToString()
     }
 }
