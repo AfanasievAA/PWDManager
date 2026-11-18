@@ -1,8 +1,10 @@
 ﻿param(
     [Parameter(Mandatory = $false, Position = 1)]
-    [string]$PasswordDataFileName = $null
+    [string]$PasswordDataFileName = $null,
+    # Monospaced font used across all GUI elements (forms, grids, buttons, status bar)
+    [double]$FontSize = 10
 )
-$Script:version = '1.14 (18 Nov 2026)'
+$Script:version = '1.15 (18 Nov 2026)'
 <#
 .SYNOPSIS
   Secure Password Storage Manager
@@ -14,7 +16,7 @@ $Script:version = '1.14 (18 Nov 2026)'
  Author:         Andrew Afanasiev
  Contacts:       AfanasievAA@yandex.ru
  CommonFunctions.ps1 is required
-..EXAMPLE
+.EXAMPLE
   GUI Interface. Just run and enjoy
     $script:passwordDataFileName = "secure_passwords_v1.xml"
     # Decrypts passwords for multiple users from SECURE XML storage and returns an hashtable of PSCredential objects
@@ -116,6 +118,7 @@ $Script:version = '1.14 (18 Nov 2026)'
     $users1Creds = $creds["user1"]
 #>
 $Script:ScriptRootFolderRunPath = Split-Path (Get-Variable MyInvocation -Scope 0).Value.MyCommand.Path
+[string]$MonoFontName = 'Consolas'
 
 # Load Common Functions
 try {
@@ -145,6 +148,15 @@ function Get-SettingsFilePath([string]$FileName) {
     return Join-Path -Path $Script:ScriptRootFolderRunPath -ChildPath $FileName
 }
 
+# Load System.Drawing explicitly: PowerShell 7 does not preload it, and the font
+# objects below are created before the Add-Type for System.Windows.Forms runs
+Add-Type -AssemblyName System.Drawing
+# Shared font objects: created once and reused by every form, grid and button.
+# Forms, grids and the status bar share one size; Save is bold, the +/- buttons use 16 pt bold
+$Script:FormFont = New-Object System.Drawing.Font($MonoFontName, $FontSize, [System.Drawing.FontStyle]::Regular)
+$Script:GridFont = New-Object System.Drawing.Font($MonoFontName, $FontSize, [System.Drawing.FontStyle]::Regular)
+$Script:BoldFont = New-Object System.Drawing.Font($MonoFontName, $FontSize, [System.Drawing.FontStyle]::Bold)
+$Script:SignFont = New-Object System.Drawing.Font($MonoFontName, 16, [System.Drawing.FontStyle]::Bold)
 $Script:iniFileFullPath = Get-SettingsFilePath 'pwd_manager.ini'
 $Script:rdpFileFullPath = Get-SettingsFilePath 'RDPSettings.rdp'
 # A file name passed as a script parameter overrides the default search
@@ -246,6 +258,11 @@ namespace PSCredentialManager.Api
 }
 
 Add-Type -AssemblyName System.Windows.Forms -ErrorAction stop
+# System.Security.dll (Pkcs: EnvelopedCms, CmsRecipient, ContentInfo) is preloaded in PowerShell 7
+# but not in Windows PowerShell 5.1; without it every [System.Security.Cryptography.Pkcs.*] literal fails
+if (-not ('System.Security.Cryptography.Pkcs.EnvelopedCms' -as [type])) {
+    Add-Type -AssemblyName System.Security -ErrorAction Stop
+}
 [void][System.Windows.Forms.Application]::EnableVisualStyles()
 
 $Script:certThumbprint = ''
@@ -391,10 +408,19 @@ function Protect-RsaMessage {
         Write-Host '❌ No certificate provided for encryption' -ForegroundColor red
         return $null
     }
-
-    $Content = Protect-CmsMessage -To $certToUse -Content $MessageText
-    $Content = $Content -replace '[\r\n]', '' -replace '-----BEGIN CMS-----', '' -replace '-----END CMS-----', ''
-    return $Content
+    try {
+        # EnvelopedCms does not check the Document Encryption EKU, unlike Protect-CmsMessage.
+        # The output is the same CMS format, so it stays compatible with files created earlier
+        $contentInfo = [System.Security.Cryptography.Pkcs.ContentInfo]::new([System.Text.Encoding]::UTF8.GetBytes($MessageText))
+        $envCms = [System.Security.Cryptography.Pkcs.EnvelopedCms]::new($contentInfo)
+        $recipient = [System.Security.Cryptography.Pkcs.CmsRecipient]::new([System.Security.Cryptography.Pkcs.SubjectIdentifierType]::IssuerAndSerialNumber, $certToUse)
+        $envCms.Encrypt($recipient)
+        # Base64 body without PEM header/footer, consistent with the existing storage format
+        return [Convert]::ToBase64String($envCms.Encode())
+    } catch {
+        Write-Host "❌ Encryption failed: $($_.Exception.Message)" -ForegroundColor red
+        return $null
+    }
 }
 function Protect-PasswordForCurrentCertificates {
     param([string]$PlainPassword)
@@ -404,9 +430,12 @@ function Protect-PasswordForCurrentCertificates {
     # Get all certificates from the grid
     if ($Script:CertificateDataGridView.DataSource -is [System.Data.DataTable]) {
         $dataTable = $Script:CertificateDataGridView.DataSource
+        # One store scan for all grid thumbprints instead of a scan per row
+        $certByThumb = @{}
+        foreach ($c in (Find-CertificatesByThumbprints -Thumbprints @($dataTable.Rows | ForEach-Object { $_['Thumbprint'] }))) { $certByThumb[$c.Thumbprint] = $c }
         foreach ($row in $dataTable.Rows) {
             $thumbprint = $row['Thumbprint']
-            $cert = Find-CertificateByThumbprint -Thumbprints $thumbprint
+            $cert = $certByThumb["$thumbprint"]
             if ($cert) {
                 $encrypted = Protect-RsaMessage -MessageText $PlainPassword -Certificate $cert
                 if ($encrypted) {
@@ -451,10 +480,15 @@ function Unprotect-RsaMessage {
         foreach ($block in $blocks) {
             try {
                 $block = $block.Trim()
-                if (-not $block.StartsWith('-----BEGIN CMS-----')) {
-                    $block = "-----BEGIN CMS-----$block-----END CMS-----"
+                if ($block.StartsWith('-----BEGIN CMS-----')) {
+                    # Strip PEM header/footer - Decode() expects the raw Base64 body
+                    $block = $block -replace '-----BEGIN CMS-----', '' -replace '-----END CMS-----', '' -replace '[\r\n]', ''
                 }
-                $decrypted = Unprotect-CmsMessage -To $encCert -Content $block -ErrorAction Stop
+                $envCms = [System.Security.Cryptography.Pkcs.EnvelopedCms]::new()
+                $envCms.Decode([Convert]::FromBase64String($block))
+                # Parameterless Decrypt() locates the matching private key in the user store itself
+                $envCms.Decrypt()
+                $decrypted = [System.Text.Encoding]::UTF8.GetString($envCms.ContentInfo.Content)
                 if ($null -ne $decrypted) {
                     return $decrypted
                 }
@@ -588,7 +622,8 @@ function Invoke-TargetProcess {
         if ($ArgumentList) {
             $escapedArgs = @()
             foreach ($a in $ArgumentList) {
-                $escapedArgs += "`"$(($a -replace '"','\"'))`""
+                # "" is the escape for a quote inside the double-quoted inner command (\" would break the parser)
+                $escapedArgs += "`"$(($a -replace '"','""'))`""
             }
             $innerCmd += " -ArgumentList $($escapedArgs -join ' ')"
         }
@@ -803,7 +838,9 @@ function Show-EditDialog {
         ClientSize = New-Object System.Drawing.Size(400, 130)
         FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
         Text = 'Edit name and password'
-        Font = New-Object System.Drawing.Font('Lucida Console', 10, [System.Drawing.FontStyle]::Regular)
+        Font = $Script:FormFont
+        # Center over the main window instead of the screen
+        StartPosition = 'CenterParent'
     }
     $Dialog = New-Object System.Windows.Forms.Form -Property $DialogProps
 
@@ -852,7 +889,8 @@ function Show-EditDialog {
         })
     $Dialog.Controls.Add($GenPWDButton); $Dialog.Controls.Add($PwLenTextBox)
 
-    if ($Dialog.ShowDialog() -eq 'OK') {
+    # Owner makes the dialog modal to the main window and keeps it on top of it
+    if ($Dialog.ShowDialog($Script:MainForm) -eq 'OK') {
         return [PSCustomObject]@{
             Login = $UserNameTextBox.Text
             Comment = $CommentTextBox.Text
@@ -866,10 +904,11 @@ function Show-InputBoxDialog {
     param($FormHeader, $RequestText, $ConnectButtonCaption)
 
     $form = New-Object System.Windows.Forms.Form -Property @{
-        Font = New-Object System.Drawing.Font('Lucida Console', 10, [System.Drawing.FontStyle]::Regular)
+        Font = $Script:FormFont
         Text = $FormHeader
         Size = New-Object Drawing.Size @(300, 180)
-        StartPosition = 'WindowsDefaultLocation'
+        # Center over the main window instead of the screen
+        StartPosition = 'CenterParent'
     }
 
     $label = New-Object System.Windows.Forms.Label -Property @{ Location = New-Object Drawing.Point @(10, 20); Size = New-Object Drawing.Size @(280, 40); Text = $RequestText }
@@ -882,7 +921,7 @@ function Show-InputBoxDialog {
     $form.AcceptButton = $button
     $form.Controls.Add($button)
 
-    if ($form.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    if ($form.ShowDialog($Script:MainForm) -eq [System.Windows.Forms.DialogResult]::OK) {
         return $textBox.Text.Trim()
     }
     return $null
@@ -895,9 +934,10 @@ function New-SelfSignedEncryptionCertificate {
     # in case command auto-loading is disabled
     Import-Module PKI -ErrorAction SilentlyContinue
     try {
-        # DocumentEncryptionCertLegacyCsp sets the Document Encryption EKU (1.3.6.1.4.1.311.80.1),
-        # which Select-CertificateGui filters by and Protect-CmsMessage requires;
-        # the legacy CSP key format is the most compatible one for CMS encrypt/decrypt
+        # DocumentEncryptionCertLegacyCsp issues a certificate with the Document Encryption EKU;
+        # the EKU is not strictly required anymore (EnvelopedCms works with any RSA cert),
+        # but it is still useful for compatibility with Protect-CmsMessage on other machines.
+        # The legacy CSP key format is the most compatible one for CMS encrypt/decrypt
         $newCert = New-SelfSignedCertificate -Type DocumentEncryptionCertLegacyCsp `
             -Subject "CN=$CommonName" -FriendlyName $CommonName `
             -CertStoreLocation 'Cert:\CurrentUser\My' `
@@ -917,46 +957,89 @@ function Select-CertificateGui {
 
     $Form = New-Object System.Windows.Forms.Form -Property @{
         ClientSize = New-Object System.Drawing.Size(660, 350)
-        Text = 'Please choose the certificate to encrypt passwords with'
-        Font = New-Object System.Drawing.Font('Lucida Console', 10, [System.Drawing.FontStyle]::Regular)
+        Text = 'Please choose the certificate to encrypt passwords with (Enter in Search box applies the filter)'
+        Font = $Script:FormFont
     }
 
     $OKButton = New-Object System.Windows.Forms.Button -Property @{ Location = New-Object System.Drawing.Point(10, 315); Size = New-Object System.Drawing.Size(75, 30); Text = 'OK'; DialogResult = [System.Windows.Forms.DialogResult]::OK }
     $CancelButton = New-Object System.Windows.Forms.Button -Property @{ Location = New-Object System.Drawing.Point(90, 315); Size = New-Object System.Drawing.Size(80, 30); Text = 'Cancel'; DialogResult = [System.Windows.Forms.DialogResult]::Cancel }
     $NewCertButton = New-Object System.Windows.Forms.Button -Property @{ Location = New-Object System.Drawing.Point(180, 315); Size = New-Object System.Drawing.Size(200, 30); Text = 'Issue Self-Signed' }
-    $Form.AcceptButton = $OKButton; $Form.CancelButton = $CancelButton
+    # No AcceptButton: Enter must not close the dialog (it is used for search only); Esc still cancels via CancelButton
+    $Form.CancelButton = $CancelButton
     $Form.Controls.Add($OKButton); $Form.Controls.Add($CancelButton); $Form.Controls.Add($NewCertButton)
 
+    $SearchTextBox = New-Object System.Windows.Forms.TextBox -Property @{ Location = New-Object System.Drawing.Point(5, 8); Size = New-Object System.Drawing.Size(400, 20) }
+    $SearchLabel = New-Object System.Windows.Forms.Label -Property @{ AutoSize = $true; Location = New-Object System.Drawing.Point(415, 11); Text = 'Search + Enter' }
+    $Form.Controls.Add($SearchTextBox); $Form.Controls.Add($SearchLabel)
     $CertDataGrid = New-Object System.Windows.Forms.DataGridView -Property @{
         AllowUserToResizeRows = $false; RowHeadersVisible = $false; AllowUserToAddRows = $false
-        Location = New-Object Drawing.Point(5, 5); Size = New-Object Drawing.Point(650, 305)
+        Location = New-Object Drawing.Point(5, 33); Size = New-Object Drawing.Point(650, 277)
+        # Shared grid font
+        Font = $Script:GridFont
         ReadOnly = $true; MultiSelect = $false; SelectionMode = 'FullRowSelect'
     }
     $Form.Controls.Add($CertDataGrid)
     $CertDataGrid.Add_MouseDoubleClick({ $Form.DialogResult = [System.Windows.Forms.DialogResult]::OK })
-
     $CertArrayLST = New-Object System.Collections.ArrayList
     $stores = if ($PrivateKeyOnly) { @('Cert:\CurrentUser\my') } else { @('Cert:\CurrentUser\my', 'Cert:\CurrentUser\AddressBook', 'Cert:\CurrentUser\TrustedPeople') }
 
     # Shared grid population logic: used on form load and after issuing a self-signed certificate
     $RefreshCertGrid = {
         $CertArrayLST.Clear()
+        # Default EKU filter: certificates intended for encryption (email protection, EFS, document encryption)
+        $encryptionEkus = @('1.3.6.1.5.5.7.3.4', '1.3.6.1.4.1.311.10.3.4', '1.3.6.1.4.1.311.80.1')
+        $searchText = ''
+        if ($SearchTextBox.Text) { $searchText = $SearchTextBox.Text.Trim() }
         foreach ($store in $stores) {
-            $certsFound = Get-ChildItem $store -ErrorAction SilentlyContinue | Where-Object {
-                $_.EnhancedKeyUsageList.ObjectId -like '1.3.6.1.4.1.311.80.1' -and (-not $PrivateKeyOnly -or $_.HasPrivateKey)
-            } | Select-Object @{Name = 'Name'; Expression = { Get-CertificateDnsNames $_ } }, NotBefore, NotAfter, Subject, Thumbprint
-
-            if ($certsFound) {
-                if ($certsFound.Count -gt 1) { $CertArrayLST.AddRange($certsFound) } else { $CertArrayLST.Add($certsFound) }
+            foreach ($cert in (Get-ChildItem $store -ErrorAction SilentlyContinue)) {
+                # Any RSA certificate can encrypt via EnvelopedCms, but by default only
+                # certificates with an encryption-related EKU are shown
+                if ($cert.PublicKey.Oid.FriendlyName -ne 'RSA') { continue }
+                # A private key is required only for the storage owner certificate (PrivateKeyOnly mode);
+                # recipient certificates may be public-only so the file can be shared with other users
+                if ($PrivateKeyOnly -and -not $cert.HasPrivateKey) { continue }
+                # The EKU filter is mandatory and cannot be lifted: authentication certificates rotate
+                # automatically and would silently lock the user out of the stored passwords,
+                # while email/document-encryption certificates are stable
+                $ekuOids = @($cert.EnhancedKeyUsageList.ObjectId)
+                $hasEncryptionEku = $false
+                foreach ($eku in $encryptionEkus) { if ($ekuOids -contains $eku) { $hasEncryptionEku = $true; break } }
+                if (-not $hasEncryptionEku) { continue }
+                # Computed once: used both for the search haystack and the Name column
+                $certDns = Get-CertificateDnsNames $cert
+                if ($searchText) {
+                    # Case-insensitive search over subject, DNS names and thumbprint (-notlike is case-insensitive)
+                    $haystack = "$($cert.Subject) $certDns $($cert.Thumbprint)"
+                    if ($haystack -notlike "*$searchText*") { continue }
+                }
+                # Project to the display columns right away: a raw X509Certificate2 from the Cert: provider
+                # carries PSPath/PSParentPath etc., which ConvertToDataTable would turn into extra grid columns
+                # Ekus shows the friendly names of all EKUs so the user sees why the certificate is listed
+                $null = $CertArrayLST.Add([PSCustomObject]@{
+                        Name = $certDns
+                        NotBefore = $cert.NotBefore
+                        NotAfter = $cert.NotAfter
+                        Subject = $cert.Subject
+                        Thumbprint = $cert.Thumbprint
+                        Ekus = (@($cert.EnhancedKeyUsageList | ForEach-Object { $_.FriendlyName }) -join ', ')
+                    })
             }
         }
-        # ConvertToDataTable cannot infer a schema from an empty list - leave the grid unbound in that case
+        # ConvertToDataTable cannot infer a schema from an empty list - clear the grid so stale rows do not stay visible
         if ($CertArrayLST.Count -gt 0) {
             $CertDataGrid.DataSource = $CommonObj.ConvertToDataTable($CertArrayLST)
-            Set-DataGridColumnWidth -DataGridView $CertDataGrid -Widths @(280, 120, 120, 320, 350)
+            Set-DataGridColumnWidth -DataGridView $CertDataGrid -Widths @(280, 120, 120, 320, 350, 180)
+        } else {
+            $CertDataGrid.DataSource = $null
         }
     }
     & $RefreshCertGrid
+    $SearchTextBox.Add_KeyDown({
+            # Enter applies the search filter; the dialog is not bound to an AcceptButton, so Enter never closes it
+            if ($_.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
+                & $RefreshCertGrid
+            }
+        })
 
     $NewCertButton.Add_Click({
             # Ask the user for the common name (CN) of the certificate to issue
@@ -982,7 +1065,9 @@ function Select-CertificateGui {
         })
 
     [void][System.Windows.Forms.Application]::EnableVisualStyles()
-    if ($Form.ShowDialog() -eq 'OK' -and $CertDataGrid.SelectedRows.Count -gt 0) {
+    # Center over the main window (or over the parent dialog when called from another dialog)
+    $Form.StartPosition = 'CenterParent'
+    if ($Form.ShowDialog($Script:MainForm) -eq 'OK' -and $CertDataGrid.SelectedRows.Count -gt 0) {
         return $CertDataGrid.SelectedRows[0].DataBoundItem.Thumbprint
     }
     return $null
@@ -1023,7 +1108,7 @@ function Initialize-EmptyGrids {
         $Script:UserDataGridView.DataSource = $userTable
     }
     Set-DataGridColumnWidth -DataGridView $Script:CertificateDataGridView -Widths @(260, 120, 120, 240, 250)
-    Set-DataGridColumnWidth -DataGridView $Script:UserDataGridView -Widths @(220, 250, 0)
+    Set-DataGridColumnWidth -DataGridView $Script:UserDataGridView -Widths @(240, 260, 0)
 }
 
 function Import-PasswordData {
@@ -1050,14 +1135,23 @@ function Import-PasswordData {
     }
 
     $allCerts = Find-CertificatesByThumbprints -Thumbprints $Thumbprints
+    # One lookup table instead of a Where-Object scan per thumbprint (first match wins, like Select -First 1)
+    $certByThumb = @{}
+    foreach ($c in $allCerts) { if (-not $certByThumb.ContainsKey($c.Thumbprint)) { $certByThumb[$c.Thumbprint] = $c } }
     $allCertsLST = New-Object System.Collections.ArrayList
 
     $allCertsFoundFlag = $true
     foreach ($thumb in $Thumbprints) {
-        # Search for certificate in found array
-        $foundCert = $allCerts | Where-Object { $_.Thumbprint -eq $thumb } | Select-Object @{Name = 'DnsNameList'; Expression = { Get-CertificateDnsNames $_ } }, @{Name = 'NotBefore'; Expression = { $_.NotBefore } }, @{Name = 'NotAfter'; Expression = { $_.NotAfter } }, Subject, Thumbprint -First 1
+        $foundCert = $certByThumb[$thumb]
         if ($foundCert) {
-            $null = $allCertsLST.Add($foundCert)
+            # Project the found certificate to the grid columns
+            $null = $allCertsLST.Add([PSCustomObject]@{
+                    DnsNameList = Get-CertificateDnsNames $foundCert
+                    NotBefore = $foundCert.NotBefore
+                    NotAfter = $foundCert.NotAfter
+                    Subject = $foundCert.Subject
+                    Thumbprint = $foundCert.Thumbprint
+                })
         } else {
             # Create a stub with correct data types for missing certs
             $null = $allCertsLST.Add([PSCustomObject]@{
@@ -1090,8 +1184,11 @@ function Import-PasswordData {
     $UserArrayLST = New-Object System.Collections.ArrayList
     $namesLines = @($decryptedNames -split '\r\n')
     $pwdsArray = @($cliObj.PWDS)
-    if ($namesLines.Count -ne $pwdsArray.Count) {
-        Write-Host "⚠️ Warning: users count ($($namesLines.Count)) does not match passwords count ($($pwdsArray.Count)). The file may be corrupted." -ForegroundColor Yellow
+    # Compare non-empty name lines only: an empty payload or a trailing CRLF yields one blank
+    # line and would otherwise raise a false "file corrupted" warning for a valid file
+    $nonEmptyNameLines = @($namesLines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($nonEmptyNameLines.Count -ne $pwdsArray.Count) {
+        Write-Host "⚠️ Warning: users count ($($nonEmptyNameLines.Count)) does not match passwords count ($($pwdsArray.Count)). The file may be corrupted." -ForegroundColor Yellow
     }
     # Keep the PWDS index in sync with the Names line index; skip blank lines (e.g. a trailing CRLF)
     $i = 0
@@ -1111,7 +1208,7 @@ function Import-PasswordData {
     if ($UserArrayLST.Count -gt 0) {
         $Script:UserDataGridView.DataSource = $CommonObj.ConvertToDataTable($UserArrayLST)
     }
-    Set-DataGridColumnWidth -DataGridView $Script:UserDataGridView -Widths @(220, 250, 0)
+    Set-DataGridColumnWidth -DataGridView $Script:UserDataGridView -Widths @(240, 260, 0)
 
     if (-not (Get-PrivateKeyCertificate)) {
         Write-Statusbar "$($Script:PasswordDataFilePath) loaded... No private key. Decryption impossible" 'red'
@@ -1125,17 +1222,19 @@ function Import-PasswordData {
 #region Main GUI
 function Show-PasswordManagerGui {
     $FormProps = @{
-        ClientSize = New-Object System.Drawing.Size(800, 560)
+        ClientSize = New-Object System.Drawing.Size(1000, 700)
         Text = "PWD manager v.$($Script:version)"
-        Font = New-Object System.Drawing.Font('Lucida Console', 10, [System.Drawing.FontStyle]::Regular)
+        Font = $Script:FormFont
         # Prevent window from being resized smaller than initial size
-        MinimumSize = New-Object System.Drawing.Size(820, 600)
+        MinimumSize = New-Object System.Drawing.Size(1020, 740)
     }
     $MainForm = New-Object System.Windows.Forms.Form -Property $FormProps
+    # Remember the main form so child dialogs can be shown relative to it (CenterParent / ShowDialog owner)
+    $Script:MainForm = $MainForm
 
     # --- Left bottom buttons (anchored to bottom and left) ---
     $SaveButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(5, 515); Size = New-Object System.Drawing.Size(70, 40); Text = 'Save XML'; Font = New-Object System.Drawing.Font('Lucida Console', 10, [System.Drawing.FontStyle]::Bold)
+        Location = New-Object System.Drawing.Point(5, 655); Size = New-Object System.Drawing.Size(70, 40); Text = 'Save XML'; Font = $Script:BoldFont
         Anchor = 'Bottom, Left'
     }
     $SaveButton.Add_Click({
@@ -1155,12 +1254,12 @@ function Show-PasswordManagerGui {
     $MainForm.Controls.Add($SaveButton)
 
     $LoadButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(80, 520); Size = New-Object System.Drawing.Size(70, 35); Text = "Load`r`nXML"
+        Location = New-Object System.Drawing.Point(85, 660); Size = New-Object System.Drawing.Size(70, 35); Text = "Load`r`nXML"
         Anchor = 'Bottom, Left'
     }
     $LoadButton.Add_Click({
             $dlg = New-Object System.Windows.Forms.OpenFileDialog -Property @{ Title = 'Select password XML file'; Filter = 'XML Files (*.xml)|*.xml|All Files (*.*)|*.*'; InitialDirectory = [Environment]::GetFolderPath('MyDocuments') }
-            if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            if ($dlg.ShowDialog($MainForm) -eq [System.Windows.Forms.DialogResult]::OK) {
                 $Script:PasswordDataFilePath = $dlg.FileName
                 try {
                     # Import-PasswordData writes its own status message; log success to console only
@@ -1173,7 +1272,7 @@ function Show-PasswordManagerGui {
     $MainForm.Controls.Add($LoadButton)
 
     $NewXmlButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(155, 520); Size = New-Object System.Drawing.Size(70, 35); Text = "New`r`nXML"
+        Location = New-Object System.Drawing.Point(160, 660); Size = New-Object System.Drawing.Size(70, 35); Text = "New`r`nXML"
         Anchor = 'Bottom, Left'
     }
     $NewXmlButton.Add_Click({
@@ -1181,7 +1280,7 @@ function Show-PasswordManagerGui {
             $folderBrowser.Description = 'Select folder for new password file'
             $folderBrowser.ShowNewFolderButton = $true
 
-            if ($folderBrowser.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            if ($folderBrowser.ShowDialog($MainForm) -eq [System.Windows.Forms.DialogResult]::OK) {
                 $folderPath = $folderBrowser.SelectedPath
                 $fileName = 'secure_passwords_v1.xml'
                 $newFilePath = Join-Path $folderPath $fileName
@@ -1193,6 +1292,7 @@ function Show-PasswordManagerGui {
 
                 try {
                     $Script:CachedPrivateKeyCert = $null
+                    $Script:CachedPrivateKeyCertKey = $null
                     $Script:certThumbprint = ''
                     Initialize-EmptyGrids
                     $Script:PasswordDataFilePath = $newFilePath
@@ -1207,7 +1307,7 @@ function Show-PasswordManagerGui {
     $MainForm.Controls.Add($NewXmlButton)
 
     $PlusButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(245, 520); Size = New-Object System.Drawing.Size(30, 30); Text = '+'; Font = New-Object System.Drawing.Font('Lucida Console', 16, [System.Drawing.FontStyle]::Bold)
+        Location = New-Object System.Drawing.Point(245, 660); Size = New-Object System.Drawing.Size(30, 30); Text = '+'; Font = $Script:SignFont
         Anchor = 'Bottom, Left'
     }
     $PlusButton.Add_Click({
@@ -1234,7 +1334,7 @@ function Show-PasswordManagerGui {
     $MainForm.Controls.Add($PlusButton)
 
     $minusButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(280, 520); Size = New-Object System.Drawing.Size(30, 30); Text = '-'; Font = New-Object System.Drawing.Font('Lucida Console', 16, [System.Drawing.FontStyle]::Bold)
+        Location = New-Object System.Drawing.Point(280, 660); Size = New-Object System.Drawing.Size(30, 30); Text = '-'; Font = $Script:SignFont
         Anchor = 'Bottom, Left'
     }
     $minusButton.Add_Click({
@@ -1247,9 +1347,9 @@ function Show-PasswordManagerGui {
 
     # --- Status bar (anchored to bottom, stretches left and right) ---
     $Script:StatusBarTextBox = New-Object System.Windows.Forms.TextBox -Property @{
-        Text = 'loading ...'; ReadOnly = $true; AutoSize = $false; Width = 470; Height = 40
-        Location = New-Object System.Drawing.Point(320, 515); BackColor = 'white'
-        Font = New-Object System.Drawing.Font('Courier New', 10, [System.Drawing.FontStyle]::Regular)
+        Text = 'loading ...'; ReadOnly = $true; AutoSize = $false; Width = 670; Height = 40
+        Location = New-Object System.Drawing.Point(320, 655); BackColor = 'white'
+        Font = $Script:FormFont
         TextAlign = 'Center'; BorderStyle = 'None'; MultiLine = $true; ForeColor = 'blue'
         Anchor = 'Bottom, Left, Right'
     }
@@ -1258,7 +1358,9 @@ function Show-PasswordManagerGui {
     # --- Certificate table (anchored to all edges, stretches down and right) ---
     $Script:CertificateDataGridView = New-Object System.Windows.Forms.DataGridView -Property @{
         AllowUserToResizeRows = $false; RowHeadersVisible = $false; AllowUserToAddRows = $false
-        Location = New-Object Drawing.Point(435, 5); Size = New-Object Drawing.Size(360, 475)
+        Location = New-Object Drawing.Point(510, 5); Size = New-Object Drawing.Size(485, 600)
+        # Shared grid font (slightly smaller than the form font)
+        Font = $Script:GridFont
         ReadOnly = $true; MultiSelect = $false; SelectionMode = 'FullRowSelect'
         Anchor = 'Top, Bottom, Left, Right'
     }
@@ -1266,7 +1368,7 @@ function Show-PasswordManagerGui {
 
     # --- Certificate control buttons (anchored to bottom and right) ---
     $CertPlusButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(440, 480); Size = New-Object System.Drawing.Size(30, 30); Text = '+'; Font = New-Object System.Drawing.Font('Lucida Console', 16, [System.Drawing.FontStyle]::Bold)
+        Location = New-Object System.Drawing.Point(515, 615); Size = New-Object System.Drawing.Size(30, 30); Text = '+'; Font = $Script:SignFont
         Anchor = 'Bottom, Right'
     }
     $CertPlusButton.Add_Click({
@@ -1276,7 +1378,7 @@ function Show-PasswordManagerGui {
     $MainForm.Controls.Add($CertPlusButton)
 
     $CertMinusButton = New-Object System.Windows.Forms.Button -Property @{
-        Location = New-Object System.Drawing.Point(470, 480); Size = New-Object System.Drawing.Size(30, 30); Text = '-'; Font = New-Object System.Drawing.Font('Lucida Console', 16, [System.Drawing.FontStyle]::Bold)
+        Location = New-Object System.Drawing.Point(550, 615); Size = New-Object System.Drawing.Size(30, 30); Text = '-'; Font = $Script:SignFont
         Anchor = 'Bottom, Right'
     }
     $CertMinusButton.Add_Click({
@@ -1290,14 +1392,16 @@ function Show-PasswordManagerGui {
     # --- User table (anchored to top, bottom and left, stretches only down) ---
     $Script:UserDataGridView = New-Object System.Windows.Forms.DataGridView -Property @{
         AllowUserToResizeRows = $false; RowHeadersVisible = $false; AllowUserToAddRows = $false
-        Location = New-Object Drawing.Point(5, 5); Size = New-Object Drawing.Size(430, 505)
+        Location = New-Object Drawing.Point(5, 5); Size = New-Object Drawing.Size(500, 640)
+        # Shared grid font
+        Font = $Script:GridFont
         ReadOnly = $true; MultiSelect = $false; SelectionMode = 'FullRowSelect'
         Anchor = 'Top, Bottom, Left'
     }
     $MainForm.Controls.Add($Script:UserDataGridView)
 
     # --- Context menu ---
-    $contextMenuStrip = [System.Windows.Forms.ContextMenuStrip]@{ Font = New-Object System.Drawing.Font('Courier New', 10, [System.Drawing.FontStyle]::Regular) }
+    $contextMenuStrip = [System.Windows.Forms.ContextMenuStrip]@{ Font = $Script:FormFont }
     $Script:UserDataGridView.Add_CellMouseDown({
             # Right-click must select the row under the cursor before the menu opens,
             # otherwise menu actions would target a previously selected row (or none)
@@ -1359,6 +1463,10 @@ function Show-PasswordManagerGui {
     $RDPConnectTS.Add_Click({
             $result = Connect-RdpSession
             if ($result) {
+                # Rebuild the queue without the existing entry so the menu shows no duplicates
+                $dedupQueue = New-Object System.Collections.Queue
+                while ($Script:ConnectionHistory.RDP.Count -gt 0) { $oldItem = $Script:ConnectionHistory.RDP.Dequeue(); if ($oldItem -ne $result) { $dedupQueue.Enqueue($oldItem) } }
+                $Script:ConnectionHistory.RDP = $dedupQueue
                 $Script:ConnectionHistory.RDP.Enqueue($result)
                 while ($Script:ConnectionHistory.RDP.Count -gt 10) { $Script:ConnectionHistory.RDP.Dequeue() }
                 Update-HistoryMenu -MenuItem $RDPConnectTS -Type 'RDP'
@@ -1376,6 +1484,10 @@ function Show-PasswordManagerGui {
     $SMBConnectTS.Add_Click({
             $result = Connect-SmbShare
             if ($result) {
+                # Rebuild the queue without the existing entry so the menu shows no duplicates
+                $dedupQueue = New-Object System.Collections.Queue
+                while ($Script:ConnectionHistory.SMB.Count -gt 0) { $oldItem = $Script:ConnectionHistory.SMB.Dequeue(); if ($oldItem -ne $result) { $dedupQueue.Enqueue($oldItem) } }
+                $Script:ConnectionHistory.SMB = $dedupQueue
                 $Script:ConnectionHistory.SMB.Enqueue($result)
                 while ($Script:ConnectionHistory.SMB.Count -gt 10) { $Script:ConnectionHistory.SMB.Dequeue() }
                 Update-HistoryMenu -MenuItem $SMBConnectTS -Type 'SMB'
@@ -1521,17 +1633,29 @@ function Export-PasswordData {
         Write-Host "⚠️ Warning: $droppedCount row(s) with an empty Login will NOT be saved." -ForegroundColor Yellow
     }
     if ($targetUsers.Count -eq 0) {
+        # Data-loss guard: an empty list would silently overwrite an existing file that still holds users
+        # (e.g. after a failed import when the private key was unavailable)
+        if (Test-Path -LiteralPath $Script:PasswordDataFilePath) {
+            $answer = [System.Windows.Forms.MessageBox]::Show("The user list is empty. Saving will REPLACE the existing file '$Script:PasswordDataFilePath' (a .bak copy is kept). Continue?", 'Confirm saving an empty list', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) {
+                Write-Statusbar 'Saving cancelled: the user list is empty' 'red'
+                return $false
+            }
+        }
         Write-Statusbar 'Warning: No users in the list. Saving empty template...' 'darkgray'
     }
 
     # 2. Search for certificates in the system
     $passwordsXML.Keys = $targetThumbprints
     $foundCerts = Find-CertificatesByThumbprints -Thumbprints $targetThumbprints
+    # One lookup table instead of a Where-Object scan per thumbprint (first match wins)
+    $certByThumb = @{}
+    foreach ($c in $foundCerts) { if (-not $certByThumb.ContainsKey($c.Thumbprint)) { $certByThumb[$c.Thumbprint] = $c } }
 
     # Reorder certificates to match the thumbprint order: Keys[i] must correspond to block i in Names and PWDS
     $targetCerts = @()
     foreach ($thumb in $targetThumbprints) {
-        $cert = $foundCerts | Where-Object { $_.Thumbprint -eq $thumb } | Select-Object -First 1
+        $cert = $certByThumb[$thumb]
         if ($cert) { $targetCerts += $cert }
     }
 
@@ -1543,20 +1667,20 @@ function Export-PasswordData {
 
     # 3. Prepare data (Login##Comment) for encryption.
     # Line breaks inside Login/Comment would break the CRLF-separated format, so they are replaced
-    $payloadArray = @()
+    $payloadArray = [System.Collections.Generic.List[string]]::new()
     foreach ($row in $targetUsers) {
         $safeLogin = $row.Login -replace '[\r\n]+', ''
         $safeComment = $row.Comment -replace '[\r\n]+', ' '
-        $payloadArray += "$($safeLogin)##$($safeComment)"
+        $payloadArray.Add("$($safeLogin)##$($safeComment)")
     }
     $namesPayload = $payloadArray -join "`r`n"
 
     # 4. Encrypt user names for all certificates
-    $namesCms = @()
+    $namesCms = [System.Collections.Generic.List[string]]::new()
     foreach ($cert in $targetCerts) {
         $encryptedNames = Protect-RsaMessage -MessageText $namesPayload -Certificate $cert
         if ($encryptedNames) {
-            $namesCms += $encryptedNames
+            $namesCms.Add($encryptedNames)
         } else {
             Write-Statusbar "❌ Failed to encrypt names for cert: $($cert.Thumbprint). Save ABORTED." 'red'
             return $false
@@ -1565,7 +1689,8 @@ function Export-PasswordData {
     $passwordsXML.Names = $namesCms -join ','
 
     # 5. Password processing - always decrypt to memory and re-encrypt from scratch
-    $passwordsXML.PWDS = @()
+    # List instead of += : avoids a full-array copy on every user row (O(n^2) in total)
+    $pwdList = [System.Collections.Generic.List[string]]::new()
 
     foreach ($userRow in $targetUsers) {
         # Cast to a string: DBNull (e.g. after an incomplete import) passes IsNullOrEmpty and aborts the save
@@ -1580,19 +1705,20 @@ function Export-PasswordData {
             }
         }
 
-        $pwdCms = @()
+        $pwdCms = [System.Collections.Generic.List[string]]::new()
         foreach ($cert in $targetCerts) {
             $encryptedPwd = Protect-RsaMessage -MessageText $plainPwd -Certificate $cert
             if ($encryptedPwd) {
-                $pwdCms += $encryptedPwd
+                $pwdCms.Add($encryptedPwd)
             } else {
                 Write-Statusbar "❌ Failed to encrypt password for cert: $($cert.Thumbprint). Save ABORTED." 'red'
                 return $false
             }
         }
 
-        $passwordsXML.PWDS += ($pwdCms -join ',')
+        $pwdList.Add([string]($pwdCms -join ','))
     }
+    $passwordsXML.PWDS = $pwdList.ToArray()
 
     # 6. Save to file
     try {
