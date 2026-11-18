@@ -1,6 +1,6 @@
 ﻿# 🔐 Secure Password Storage Manager
 
-**Version:** 1.10 (01 Oct 2026)
+**Version:** 1.15 (18 Nov 2026)
 <img width="1002" height="739" alt="image" src="https://github.com/user-attachments/assets/5ca98cb2-edeb-44b1-8ad4-11692cbe9b15" />
 
 A PowerShell-based GUI password manager that creates and manages password storage using **RSA encryption** via certificates (CMS/PKCS#7). It is recommended to use hardware **smartcards or tokens** for maximum security.
@@ -26,7 +26,7 @@ A PowerShell-based GUI password manager that creates and manages password storag
 
 - Windows PowerShell 5.1 or PowerShell 7+
 - `inc\Common_Functions.ps1` (required helper library, placed next to the script)
-- A certificate with the **Document Encryption** EKU (`1.3.6.1.4.1.311.80.1`) — smartcard/token recommended
+- A certificate, smartcard/token recommended
 
 ## 🚀 Usage
 
